@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<title>eco up! · Fahrzeugdaten</title>
+<style>
+:root{--pink:#ff1493;--pink-dim:#a30d5f;--bg:#000;--tile:#0c0c0c;--line:#1e1e1e;--green:#39ff14;--orange:#ff9f1a;--red:#ff3b3b;
+--mono:ui-monospace,SFMono-Regular,"Cascadia Code","Roboto Mono",Menlo,Consolas,monospace}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--pink);font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+body{padding:14px 12px 40px;max-width:760px;margin:0 auto;min-height:100vh}
+h1.title{font-size:28px;font-weight:700;text-align:center;margin:6px 0 2px;text-wrap:balance}
+.sub{text-align:center;color:#9a9a9a;font-size:12px;letter-spacing:.4px;margin-bottom:12px}
+.hero{border:1.5px solid var(--pink);border-radius:20px;padding:14px 14px 16px;box-shadow:0 0 22px rgba(255,20,147,.35),inset 0 0 18px rgba(255,20,147,.08);background:#000}
+.state{display:flex;justify-content:center}
+.badge{font-family:var(--mono);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:#9a9a9a;border:1px solid #333;border-radius:20px;padding:5px 14px}
+.badge.on{color:var(--green);border-color:var(--green);box-shadow:0 0 12px rgba(57,255,20,.5)}
+.badge.busy{color:var(--orange);border-color:var(--orange)}
+.badge.err{color:var(--red);border-color:var(--red)}
+.car{display:block;width:100%;max-width:340px;margin:10px auto 2px;filter:drop-shadow(0 0 7px rgba(255,20,147,.7))}
+.car.live .lamp{fill:var(--green)}
+.heroinfo{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:4px 0 12px}
+.chip{font-size:10.5px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;border:.8px solid var(--pink);border-radius:8px;padding:4px 11px;color:#7cff00;background:linear-gradient(rgba(255,20,147,.18),rgba(255,20,147,.04));box-shadow:inset 0 0 10px rgba(255,20,147,.12),0 0 6px rgba(255,20,147,.45)}
+.chip.warn{color:var(--orange)}.chip.bad{color:var(--red)}.chip.mute{color:#9a9a9a}
+.btns{display:grid;gap:10px}
+button{font:inherit;cursor:pointer}
+.efb{font-family:var(--mono);font-size:13.5px;font-weight:700;letter-spacing:.7px;color:#fff;background:var(--pink);border:0;border-radius:14px;padding:13px 18px;box-shadow:0 6px 18px -8px var(--pink);width:100%}
+.efb:active{transform:scale(.985)}
+.efb[disabled]{opacity:.5}
+.wbtn{background:#fff;color:var(--pink);border:2.4px solid var(--pink);border-radius:10px;box-shadow:0 0 16px rgba(255,20,147,.45);font-weight:700;font-size:13.8px;padding:10px 14px;width:100%}
+.ghost{background:none;border:1px solid var(--pink-dim);color:var(--pink);border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.note{font-size:12.5px;line-height:1.45;color:#cfcfcf;border:1px dashed var(--pink-dim);border-radius:12px;padding:10px 12px;margin-top:12px}
+.note b{color:var(--pink)}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0 12px;position:sticky;top:0;background:#000;padding:8px 0;z-index:5}
+.tab{font-family:Arial,sans-serif;font-size:14px;font-weight:600;color:var(--pink);background:rgba(255,20,147,.08);border:1px solid var(--pink-dim);border-radius:10px;padding:10px 4px}
+.tab.active{color:var(--green);background:rgba(57,255,20,.12);border-color:var(--green);box-shadow:0 0 15px rgba(57,255,20,.6)}
+.tab .cnt{display:inline-block;min-width:18px;border-radius:9px;background:var(--red);color:#fff;font-size:11px;padding:1px 5px;margin-left:3px}
+.grid{display:grid;gap:11px;grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(min-width:620px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.tile{background:var(--tile);border:.8px solid rgba(255,20,147,.32);border-radius:13px;box-shadow:0 0 11px rgba(255,20,147,.2);padding:11px 11px 6px;min-width:0}
+.tile.wide{grid-column:1/-1}
+.tile.off{opacity:.38}
+.lab{color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.val{color:#fff;font-size:26.4px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.25}
+.val.txt{font-size:17px;line-height:1.3;padding:5px 0}
+.val.hot{color:var(--red)}.val.cold{color:#59c8ff}.val.good{color:var(--green)}.val.mid{color:var(--orange)}
+.u{color:var(--pink);font-size:18.5px;font-weight:600;margin-left:3px}
+.stats{color:#8a8a8a;font-size:10.5px;min-height:14px;font-variant-numeric:tabular-nums}
+canvas.spark{display:block;width:100%;height:30px;margin-top:2px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.seg button{background:none;border:1px solid var(--pink-dim);color:var(--pink);border-radius:8px;padding:8px 2px;font-size:12.5px;font-weight:700}
+.seg button.active{background:var(--pink);color:#fff;border-color:var(--pink)}
+.panel{display:none}.panel.show{display:block}
+h2{font-size:17.9px;margin:18px 0 9px}
+.dtc{background:var(--tile);border:.8px solid rgba(255,59,59,.55);border-radius:13px;padding:11px 12px;margin-bottom:9px;box-shadow:0 0 11px rgba(255,59,59,.2)}
+.dtc.pend{border-color:rgba(255,159,26,.6);box-shadow:0 0 11px rgba(255,159,26,.18)}
+.dtc .code{font-family:var(--mono);font-size:21px;font-weight:700;color:#fff}
+.dtc .kind{float:right;font-size:10.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--red)}
+.dtc.pend .kind{color:var(--orange)}
+.dtc .txt{color:#cfcfcf;font-size:13px;margin-top:3px;line-height:1.4}
+.empty{color:#8a8a8a;font-size:13px;padding:6px 2px 10px}
+.ready{display:flex;flex-wrap:wrap;gap:6px}
+.ready span{font-size:11.5px;border-radius:7px;padding:4px 8px;border:1px solid #333;color:#9a9a9a}
+.ready span.ok{color:var(--green);border-color:rgba(57,255,20,.5)}
+.ready span.open{color:var(--orange);border-color:rgba(255,159,26,.6)}
+#log{font-family:var(--mono);font-size:12px;line-height:1.5;background:var(--tile);border:.8px solid rgba(255,20,147,.32);border-radius:13px;padding:10px;height:46vh;overflow:auto;white-space:pre-wrap;word-break:break-all;color:#cfcfcf}
+#log .tx{color:var(--pink)}#log .er{color:var(--red)}#log .in{color:#8a8a8a}
+.cmdrow{display:grid;grid-template-columns:1fr auto;gap:8px;margin:10px 0}
+input[type=text]{font-family:var(--mono);font-size:16px;background:#000;color:#fff;border:1px solid var(--pink);border-radius:10px;padding:11px 12px;width:100%;min-width:0;text-transform:uppercase}
+.quick{display:flex;flex-wrap:wrap;gap:6px}
+.quick button{font-family:var(--mono);font-size:12px;background:none;border:1px solid var(--pink-dim);color:var(--pink);border-radius:8px;padding:6px 9px}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;padding:18px;z-index:20}
+.ov.show{display:flex}
+.dlg{background:#050505;border:1.5px solid var(--pink);border-radius:18px;box-shadow:0 0 26px rgba(255,20,147,.5);padding:18px;max-width:420px;width:100%}
+.dlg h3{margin:0 0 8px;font-size:18px}.dlg p{color:#cfcfcf;font-size:13.5px;line-height:1.5;margin:0 0 14px}
+.foot{color:#666;font-size:11px;text-align:center;margin-top:26px;line-height:1.5}
+button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+</style>
+</head>
+<body>
+<h1 class="title">eco up! · Fahrzeugdaten</h1>
+<div class="sub">VW eco up! CNG · vGate iCar Pro 2S · Pixel 10 Pro</div>
+
+<section class="hero">
+  <div class="state"><span class="badge" id="badge">Offline</span></div>
+  <svg class="car" id="car" viewBox="0 0 260 120" fill="none" stroke="#ff1493" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M18 92V72c1-9 8-14 20-16l30-28c5-5 11-7 19-7h82c9 0 16 4 21 11l18 26c16 3 26 9 30 22v12h-18"/>
+    <path d="M18 92h22M88 92h84"/>
+    <path d="M78 54l22-22h34v22zM142 32h28c5 0 9 2 12 6l11 16h-51z" stroke-width="1.8"/>
+    <path d="M138 56v34M82 62h10M146 62h10" stroke-width="1.6"/>
+    <circle cx="64" cy="92" r="19"/><circle cx="64" cy="92" r="8" stroke-width="1.8"/>
+    <circle cx="196" cy="92" r="19"/><circle cx="196" cy="92" r="8" stroke-width="1.8"/>
+    <rect class="lamp" x="226" y="66" width="10" height="6" rx="2" fill="#ff1493" stroke="none"/>
+    <rect x="20" y="64" width="6" height="8" rx="2" fill="#ff1493" stroke="none"/>
+  </svg>
+  <div class="heroinfo">
+    <span class="chip mute" id="chipFuel">Kraftstoff –</span>
+    <span class="chip mute" id="chipMil">MKL –</span>
+    <span class="chip mute" id="chipVin">VIN –</span>
+  </div>
+  <div class="btns">
+    <button class="efb" id="btnConnect">🔌 Mit iCar Pro 2S verbinden</button>
+    <div class="row2">
+      <button class="ghost" id="btnAll">Alle BT-Geräte zeigen</button>
+      <button class="ghost" id="btnDemo">Demo-Modus</button>
+    </div>
+  </div>
+  <div class="note" id="btNote" hidden></div>
+</section>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-t="motor">Motor</button>
+  <button class="tab" data-t="cng">CNG</button>
+  <button class="tab" data-t="dtc">Fehler<span class="cnt" id="dtcCnt" hidden>0</span></button>
+  <button class="tab" data-t="con">Konsole</button>
+</nav>
+
+<section class="panel show" id="p-motor"><div class="grid" id="g-motor"></div></section>
+
+<section class="panel" id="p-cng">
+  <div class="grid" id="g-cng"></div>
+  <div class="note"><b>Verbrauch:</b> aus Luftmasse und Lambda geschätzt (CNG 17,2 : 1, Benzin 14,7 : 1) – ein Richtwert, kein Messwert.<br>
+  <b>Kraftstoff für die Rechnung:</b>
+    <div class="seg" id="fuelSeg"><button data-f="auto" class="active">Automatisch</button><button data-f="cng">CNG</button><button data-f="benzin">Benzin</button></div>
+  </div>
+  <div class="note"><b>Höhe:</b> kommt vom GPS des Handys (Standortfreigabe nötig, bleibt auf dem Gerät). Ohne GPS-Empfang erscheint ersatzweise eine grobe Höhe aus dem Luftdruck, in Stufen von rund 85 m und wetterabhängig.<br>
+  <b>Abgleichen:</b> an einem Ort mit bekannter Höhe den richtigen Wert eintragen.
+    <form class="cmdrow" id="altForm"><input type="text" id="altIn" inputmode="numeric" placeholder="Höhe in m, z. B. 312"><button class="efb" style="width:auto">Setzen</button></form>
+    <button class="ghost" id="altReset" type="button">Abgleich zurücksetzen</button> <span id="altMsg" style="color:#8a8a8a"></span>
+  </div>
+  <div class="note"><b>CNG-Tankdruck:</b> liefert VW nicht über Standard-OBD, sondern nur über herstellerspezifische Messwerte. Diese Kennungen sind hier nicht hinterlegt – zum Ausprobieren gibt es die Konsole.</div>
+</section>
+
+<section class="panel" id="p-dtc">
+  <div class="grid" id="g-dtc"></div>
+  <h2>Gespeicherte Fehler</h2><div id="dtcStored"><div class="empty">Noch nicht ausgelesen.</div></div>
+  <h2>Vorläufige Fehler</h2><div id="dtcPending"><div class="empty">Noch nicht ausgelesen.</div></div>
+  <h2>Dauerhafte Fehler</h2><div id="dtcPerm"><div class="empty">Noch nicht ausgelesen.</div></div>
+  <div class="btns" style="margin-top:8px">
+    <button class="efb" id="btnRead">🔍 Fehlerspeicher auslesen</button>
+    <button class="wbtn" id="btnClear">🗑 Fehlerspeicher löschen</button>
+  </div>
+  <h2>Prüfbereitschaft (Readiness)</h2><div class="ready" id="ready"><span>Noch nicht ausgelesen</span></div>
+</section>
+
+<section class="panel" id="p-con">
+  <div id="log"></div>
+  <form class="cmdrow" id="cmdForm"><input type="text" id="cmdIn" placeholder="z. B. 0105 oder ATRV" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="efb" style="width:auto">Senden</button></form>
+  <div class="quick" id="quick"></div>
+  <div class="note">Solange die Konsole offen ist, pausiert die Live-Abfrage. Antworten erscheinen roh mit CAN-Kennung (z. B. <b>7E8</b> = Motorsteuergerät).</div>
+</section>
+
+<div class="ov" id="ov"><div class="dlg">
+  <h3>Fehlerspeicher wirklich löschen?</h3>
+  <p>Das löscht alle Fehlercodes, die Freeze-Frame-Daten und setzt die Prüfbereitschaft zurück – kurz vor der HU ist das ungünstig. Zündung an, Motor aus. Das lässt sich nicht rückgängig machen.</p>
+  <div class="row2"><button class="ghost" id="ovNo">Abbrechen</button><button class="efb" id="ovYes">Löschen</button></div>
+</div></div>
+
+<div class="foot">Nur lesen und anzeigen – Bedienung während der Fahrt bitte dem Beifahrer überlassen.<br>Eigenes Projekt, keine Verbindung zu Volkswagen oder vGate.</div>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const enc=new TextEncoder(),dec=new TextDecoder();
+const hex=(n,l=2)=>n.toString(16).toUpperCase().padStart(l,'0');
+
+/* ---------- Kacheln ---------- */
+const u16=d=>d[0]*256+d[1];
+const TILES=[
+ {k:'05',tab:'motor',lab:'Kühlwasser',u:'°C',f:d=>d[0]-40,cls:v=>v>=108?'hot':v<60?'cold':'good'},
+ {k:'5C',tab:'motor',lab:'Öltemperatur',u:'°C',f:d=>d[0]-40,cls:v=>v>=130?'hot':v<60?'cold':'good'},
+ {k:'0F',tab:'motor',lab:'Ansaugluft',u:'°C',f:d=>d[0]-40},
+ {k:'46',tab:'motor',lab:'Außentemperatur',u:'°C',f:d=>d[0]-40},
+ {k:'42',tab:'motor',lab:'Bordspannung',u:'V',dec:2,f:d=>u16(d)/1000,cls:v=>v<11.8?'hot':v<12.4?'mid':'good'},
+ {k:'RV',tab:'motor',lab:'Spannung am Adapter',u:'V',dec:1,cls:v=>v<11.8?'hot':v<12.4?'mid':'good'},
+ {k:'0C',tab:'motor',lab:'Drehzahl',u:'1/min',f:d=>u16(d)/4},
+ {k:'04',tab:'motor',lab:'Motorlast',u:'%',f:d=>d[0]*100/255},
+ {k:'11',tab:'motor',lab:'Drosselklappe',u:'%',f:d=>d[0]*100/255},
+ {k:'0E',tab:'motor',lab:'Zündwinkel',u:'° v. OT',dec:1,f:d=>d[0]/2-64},
+ {k:'0B',tab:'motor',lab:'Saugrohrdruck',u:'kPa',f:d=>d[0]},
+ {k:'10',tab:'motor',lab:'Luftmasse',u:'g/s',dec:1,f:d=>u16(d)/100},
+ {k:'3C',tab:'motor',lab:'Kat-Temperatur',u:'°C',f:d=>u16(d)/10-40},
+ {k:'44',tab:'motor',lab:'Lambda Soll',u:'λ',dec:3,f:d=>u16(d)*2/65536},
+ {k:'34',tab:'motor',lab:'Lambda Ist',u:'λ',dec:3,f:d=>u16(d)*2/65536},
+ {k:'24',tab:'motor',lab:'Lambda Ist',u:'λ',dec:3,f:d=>u16(d)*2/65536},
+ {k:'15',tab:'motor',lab:'Sonde nach Kat',u:'V',dec:2,f:d=>d[0]/200},
+ {k:'06',tab:'motor',lab:'Gemisch kurz',u:'%',dec:1,f:d=>(d[0]-128)*100/128,cls:v=>Math.abs(v)>15?'hot':Math.abs(v)>8?'mid':'good'},
+ {k:'07',tab:'motor',lab:'Gemisch lang',u:'%',dec:1,f:d=>(d[0]-128)*100/128,cls:v=>Math.abs(v)>15?'hot':Math.abs(v)>8?'mid':'good'},
+ {k:'1F',tab:'motor',lab:'Laufzeit seit Start',u:'min',f:d=>u16(d)/60},
+
+ {k:'fuel',tab:'cng',lab:'Aktueller Kraftstoff',txt:1,wide:1,deps:['51']},
+ {k:'cons',tab:'cng',lab:'Verbrauch (geschätzt)',u:'kg/100 km',dec:1,deps:['10','44','0D','51']},
+ {k:'consH',tab:'cng',lab:'Verbrauch pro Stunde',u:'kg/h',dec:2,deps:['10','44','51']},
+ {k:'2F',tab:'cng',lab:'Tankfüllstand (OBD)',u:'%',f:d=>d[0]*100/255},
+ {k:'0D',tab:'cng',lab:'Geschwindigkeit',u:'km/h',f:d=>d[0]},
+ {k:'loop',tab:'cng',lab:'Gemischregelung',txt:1,wide:1,deps:['03']},
+ {k:'alt',tab:'cng',lab:'Höhe',u:'m',deps:['33']},
+
+ {k:'21',tab:'dtc',lab:'km mit Kontrollleuchte',u:'km',f:u16},
+ {k:'31',tab:'dtc',lab:'km seit Löschen',u:'km',f:u16},
+];
+const RAWP={'51':d=>d[0],'03':d=>d[0],'33':d=>d[0]};
+const TILE={};TILES.forEach(t=>TILE[t.k]=t);
+const val={},hist={},mm={};
+let supported=null; // Set oder null (unbekannt)
+let tab='motor',connected=false,fuelSel='auto';
+try{fuelSel=localStorage.getItem('ecoup_fuel')||'auto'}catch(e){}
+
+function buildTiles(){
+  for(const g of ['motor','cng','dtc']){
+    const el=$('g-'+g);el.innerHTML='';
+    for(const t of TILES.filter(t=>t.tab===g)){
+      if(supported&&!isAvail(t)){ if(t.k==='24'||t.k==='34'||t.k==='RV'||t.k==='5C'||t.k==='46'||t.k==='3C'||t.k==='15')continue; }
+      if(!supported&&(t.k==='24'||t.k==='RV'))continue;
+      const d=document.createElement('div');
+      d.className='tile'+(t.wide?' wide':'')+(supported&&!isAvail(t)?' off':'');d.id='t_'+t.k;
+      d.innerHTML=`<div class="lab" id="l_${t.k}">${t.lab}</div><div class="val${t.txt?' txt':''}" id="v_${t.k}">–</div>`+
+        (t.txt?'':`<div class="stats" id="s_${t.k}"></div><canvas class="spark" id="c_${t.k}"></canvas>`);
+      el.appendChild(d);
+      if(val[t.k]!==undefined)paint(t.k);
+    }
+  }
+}
+function isAvail(t){
+  if(t.k==='RV')return !supported.has('42');
+  if(t.k==='alt')return true;
+  const deps=t.deps||[t.k];
+  if(t.k==='cons')return supported.has('10')&&supported.has('0D');
+  if(t.k==='consH')return supported.has('10');
+  return deps.every(p=>supported.has(p));
+}
+function setVal(k,v){
+  val[k]=v;const t=TILE[k];
+  if(t&&!t.txt&&typeof v==='number'&&isFinite(v)){
+    (hist[k]=hist[k]||[]).push(v);if(hist[k].length>90)hist[k].shift();
+    const m=mm[k]=mm[k]||{lo:v,hi:v};m.lo=Math.min(m.lo,v);m.hi=Math.max(m.hi,v);
+  }
+  paint(k);
+}
+function fmt(v,d=0){return v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d})}
+function paint(k){
+  const t=TILE[k],e=$('v_'+k);if(!t||!e)return;const v=val[k];
+  if(v===null||v===undefined||(typeof v==='number'&&!isFinite(v))){e.textContent='–';e.className='val'+(t.txt?' txt':'');return}
+  if(t.txt){e.textContent=v;return}
+  e.className='val '+(t.cls?t.cls(v):'');
+  e.innerHTML=fmt(v,t.dec||0)+`<span class="u">${t.u}</span>`;
+  const s=$('s_'+k);if(s&&mm[k])s.textContent=`min ${fmt(mm[k].lo,t.dec||0)} · max ${fmt(mm[k].hi,t.dec||0)}`;
+  spark(k);
+}
+function spark(k){
+  const c=$('c_'+k),h=hist[k];if(!c||!h||h.length<2||!c.offsetWidth)return;
+  const r=devicePixelRatio||1,w=c.offsetWidth,ht=30;
+  if(c.width!==Math.round(w*r)){c.width=Math.round(w*r);c.height=ht*r}
+  const x=c.getContext('2d');x.setTransform(r,0,0,r,0,0);x.clearRect(0,0,w,ht);
+  let lo=Math.min(...h),hi=Math.max(...h);if(hi-lo<1e-6){hi+=1;lo-=1}
+  x.beginPath();h.forEach((v,i)=>{const px=i*(w-2)/(h.length-1)+1,py=ht-3-(v-lo)/(hi-lo)*(ht-6);i?x.lineTo(px,py):x.moveTo(px,py)});
+  x.strokeStyle='#ff1493';x.lineWidth=1.6;x.shadowColor='#ff1493';x.shadowBlur=4;x.stroke();
+}
+
+/* ---------- ELM327 über BLE ---------- */
+const elm={dev:null,tx:null,rx:null,buf:'',waiter:null,chain:Promise.resolve(),demo:false,hl:3,noResp:false};
+const SVC=[0x18f0,0xfff0,0xffe0,0xae30,'e7810a71-73ae-499d-8c15-faa9aef0c3f2','49535343-fe7d-4ae5-8fa9-9fafd205e455'];
+function log(s,c){const l=$('log'),d=document.createElement('div');if(c)d.className=c;d.textContent=s;l.appendChild(d);while(l.childNodes.length>400)l.removeChild(l.firstChild);l.scrollTop=l.scrollHeight}
+function badge(t,c){const b=$('badge');b.textContent=t;b.className='badge '+(c||'')}
+
+function cmd(c,t=4000){const p=elm.chain.then(()=>rawCmd(c,t));elm.chain=p.catch(()=>{});return p}
+async function rawCmd(c,t){
+  log('> '+c,'tx');let r;
+  if(elm.demo){await sleep(25);r=demoCmd(c)}
+  else{
+    if(!elm.tx)throw new Error('Nicht verbunden');
+    elm.buf='';
+    const done=new Promise((res,rej)=>{elm.waiter=res;setTimeout(()=>{if(elm.waiter===res){elm.waiter=null;rej(new Error('Keine Antwort auf '+c))}},t)});
+    const data=enc.encode(c+'\r');
+    for(let i=0;i<data.length;i+=20){
+      const ch=data.slice(i,i+20);
+      if(elm.noResp&&elm.tx.writeValueWithoutResponse)await elm.tx.writeValueWithoutResponse(ch);else await elm.tx.writeValue(ch);
+    }
+    r=await done;
+  }
+  log(r||'(leer)');return r;
+}
+function onNotify(e){
+  elm.buf+=dec.decode(e.target.value);
+  if(elm.buf.includes('>')){const r=elm.buf.replace(/>/g,'').replace(/\0/g,'').trim();elm.buf='';const w=elm.waiter;elm.waiter=null;if(w)w(r)}
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* Antwort mit CAN-Kennung in Nutzdaten je Steuergerät zerlegen (ISO-TP) */
+function parseFrames(raw){
+  const out={},buf={};
+  for(let line of raw.split(/[\r\n]+/)){
+    line=line.replace(/\s+/g,'').toUpperCase();
+    if(!/^[0-9A-F]+$/.test(line)||line.length<elm.hl+4||(line.length-elm.hl)%2)continue;
+    const id=line.slice(0,elm.hl),b=[];
+    for(let i=elm.hl;i<line.length;i+=2)b.push(parseInt(line.substr(i,2),16));
+    const pci=b[0]>>4;
+    if(pci===0)out[id]=b.slice(1,1+(b[0]&15));
+    else if(pci===1)buf[id]={len:((b[0]&15)<<8)|b[1],data:b.slice(2)};
+    else if(pci===2&&buf[id])buf[id].data.push(...b.slice(1));
+  }
+  for(const id in buf)out[id]=buf[id].data.slice(0,buf[id].len);
+  return out;
+}
+const isEngine=id=>id==='7E8'||id.endsWith('F110');
+async function obd(req,t){
+  const fr=parseFrames(await cmd(req,t));
+  const m=parseInt(req.slice(0,2),16)+0x40,p=req.length>=4?parseInt(req.slice(2,4),16):null;
+  const ids=Object.keys(fr).filter(id=>fr[id][0]===m&&(p===null||fr[id][1]===p));
+  if(!ids.length)return null;
+  const id=ids.find(isEngine)||ids[0];
+  return fr[id].slice(p===null?1:2);
+}
+
+async function connect(all){
+  if(!navigator.bluetooth){showBtNote();return}
+  try{
+    badge('Suche Adapter …','busy');
+    const opt=all?{acceptAllDevices:true,optionalServices:SVC}:
+      {filters:['IOS-Vlink','Vlink','VLINK','V-LINK','vLinker','iCar','OBD'].map(n=>({namePrefix:n})).concat([{services:[0x18f0]}]),optionalServices:SVC};
+    const dev=await navigator.bluetooth.requestDevice(opt);
+    elm.dev=dev;elm.demo=false;
+    dev.addEventListener('gattserverdisconnected',onDisc);
+    badge('Verbinde …','busy');log('Gerät: '+(dev.name||'(ohne Namen)'),'in');
+    const gatt=await dev.gatt.connect();
+    const svcs=await gatt.getPrimaryServices();
+    let rx=null,tx=null;
+    for(const s of svcs){
+      const cs=await s.getCharacteristics();
+      const n=cs.find(c=>c.properties.notify||c.properties.indicate);
+      const w=cs.find(c=>c.properties.writeWithoutResponse||c.properties.write);
+      if(n&&w){rx=n;tx=w;log('Dienst '+s.uuid,'in');break}
+    }
+    if(!rx||!tx)throw new Error('Kein passender BLE-Datenkanal gefunden. Am iCar Pro 2S die BLE-Kennung „IOS-Vlink“ wählen.');
+    elm.rx=rx;elm.tx=tx;elm.noResp=!tx.properties.write&&tx.properties.writeWithoutResponse;
+    await rx.startNotifications();rx.addEventListener('characteristicvaluechanged',onNotify);
+    await startSession();
+  }catch(e){
+    if(e.name==='NotFoundError'){badge('Offline');return}
+    fail(e);
+  }
+}
+function fail(e){log('Fehler: '+e.message,'er');badge('Fehler','err');note('<b>Verbindung fehlgeschlagen:</b> '+e.message);connected=false;try{elm.dev&&elm.dev.gatt.connected&&elm.dev.gatt.disconnect()}catch(_){}}
+function note(h){const n=$('btNote');n.innerHTML=h;n.hidden=!h}
+function showBtNote(){note('<b>Web Bluetooth ist hier nicht verfügbar.</b> Die Datei muss in <b>Chrome auf Android</b> über eine <b>https://</b>-Adresse geöffnet werden (z. B. GitHub Pages), Bluetooth und „Geräte in der Nähe“ müssen erlaubt sein. Zum Anschauen geht der Demo-Modus.')}
+function onDisc(){if(!connected)return;connected=false;elm.tx=null;badge('Verbindung getrennt','err');$('car').classList.remove('live');$('btnConnect').textContent='🔌 Erneut verbinden';releaseWake()}
+
+async function startSession(){
+  badge('Initialisiere …','busy');note('');
+  await cmd('ATZ',7000).catch(()=>cmd('ATZ',7000));
+  for(const c of ['ATE0','ATL0','ATS0','ATH1','ATAT1','ATSP6'])await cmd(c);
+  elm.hl=3;
+  let ok=Object.keys(parseFrames(await cmd('0100',9000))).length>0;
+  if(!ok){
+    await cmd('ATSP0');const r=await cmd('0100',15000);
+    const pn=(await cmd('ATDPN')).replace(/[^0-9A-F]/gi,'').slice(-1);
+    elm.hl=(pn==='7'||pn==='9')?8:3;
+    ok=Object.keys(parseFrames(r)).length>0||Object.keys(parseFrames(await cmd('0100',9000))).length>0;
+    if(!ok)throw new Error('Das Motorsteuergerät antwortet nicht. Zündung einschalten und erneut verbinden.');
+  }
+  supported=new Set();
+  for(const base of [0x00,0x20,0x40,0x60]){
+    const d=await obd('01'+hex(base));if(!d||d.length<4)break;
+    for(let i=0;i<32;i++)if(d[i>>3]&(0x80>>(i&7)))supported.add(hex(base+i+1));
+    if(!(d[3]&1))break;
+  }
+  log('Unterstützte PIDs: '+[...supported].join(' '),'in');
+  connected=true;buildTiles();
+  badge(elm.demo?'Demo-Modus':'Live · verbunden','on');$('car').classList.add('live');
+  $('btnConnect').textContent=elm.demo?'🔌 Mit iCar Pro 2S verbinden':'⏏ Verbindung trennen';
+  keepAwake();startGps();
+  try{const v=await obd('0902',6000);if(v){const s=String.fromCharCode(...v.slice(1).filter(c=>c>=32&&c<127));if(s.length>=11)chip('chipVin','VIN …'+s.slice(-6),'')}}catch(e){}
+  loop();
+}
+function chip(id,t,c){const e=$(id);e.textContent=t;e.className='chip '+(c||'')}
+
+/* ---------- Abfrageschleife ---------- */
+let loopId=0;
+async function loop(){
+  const me=++loopId;let n=0;
+  while(connected&&me===loopId){
+    try{
+      if(tab==='con'){await sleep(300);continue}
+      const want=new Set();
+      TILES.filter(t=>t.tab===tab).forEach(t=>(t.deps||[t.k]).forEach(p=>want.add(p)));
+      if(n%6===0){want.add('51');want.add('01')}
+      for(const p of want){
+        if(!connected||me!==loopId)return;
+        if(p==='RV'){if(!supported.has('42')){const m=(await cmd('ATRV')).match(/[\d.]+/);if(m)setVal('RV',parseFloat(m[0]))}continue}
+        if(!supported.has(p))continue;
+        const d=await obd('01'+p);if(!d)continue;
+        if(p==='01'){status01(d);continue}
+        if(RAWP[p]){val[p]=RAWP[p](d);continue}
+        const t=TILE[p];if(t&&t.f)setVal(p,t.f(d));
+      }
+      derive();n++;
+      if(tab==='dtc')await sleep(1500);
+    }catch(e){
+      if(!connected||me!==loopId)return;
+      log('Fehler: '+e.message,'er');await sleep(800);
+    }
+  }
+}
+const FUEL={1:'Benzin',4:'Diesel',5:'LPG',6:'CNG',9:'Bivalent · fährt mit Benzin',0x0D:'Bivalent · fährt mit CNG',0x0C:'Bivalent · fährt mit LPG'};
+function fuelNow(){ // 'cng' | 'benzin' | null
+  if(fuelSel!=='auto')return fuelSel;
+  const f=val['51'];if(f===6||f===0x0D)return 'cng';if(f===1||f===9)return 'benzin';return null;
+}
+function derive(){
+  const f=val['51'];
+  if(supported&&!supported.has('51')){setVal('fuel','Vom Steuergerät nicht gemeldet');chip('chipFuel',fuelSel==='auto'?'Kraftstoff ?':fuelSel,'mute')}
+  else if(f!==undefined){setVal('fuel',FUEL[f]||('Kennung '+f));const n=fuelNow();chip('chipFuel',n==='cng'?'CNG':n==='benzin'?'Benzin':'Kraftstoff ?',n==='benzin'?'warn':n?'':'mute')}
+  const fs=val['03'];
+  if(fs!==undefined)setVal('loop',{1:'Offen · Motor noch kalt',2:'Geschlossen · Lambdaregelung aktiv',4:'Offen · Last / Schubabschaltung',8:'Offen · Systemfehler',16:'Geschlossen · Sondenfehler'}[fs]||('Status '+fs));
+  altitude();
+  const maf=val['10'],lam=val['44']||1,sp=val['0D'],fn=fuelNow();
+  TILE.cons.u=fn==='benzin'?'l/100 km':'kg/100 km';TILE.consH.u=fn==='benzin'?'l/h':'kg/h';
+  if(maf!==undefined&&fn){
+    const perH=fn==='cng'?maf*3.6/(17.2*lam):maf*3600/(14.7*lam*745);
+    setVal('consH',perH);
+    if(sp!==undefined&&sp>=5)setVal('cons',perH/sp*100);else{val.cons=null;paint('cons')}
+  }
+}
+/* ---------- Höhe: GPS des Handys, ersatzweise grob aus dem Luftdruck ---------- */
+const GEOID_DE=46; // GPS liefert Höhe über dem Ellipsoid; in Deutschland liegt sie rund 46 m über der Höhe über NN
+const gps={alt:null,acc:null,ts:0,watch:null,src:''};
+let geoOff=GEOID_DE;try{const o=parseFloat(localStorage.getItem('ecoup_geo'));if(isFinite(o))geoOff=o}catch(e){}
+function startGps(){
+  if(gps.watch!==null||!navigator.geolocation)return;
+  try{gps.watch=navigator.geolocation.watchPosition(p=>{
+    if(p.coords.altitude===null||p.coords.altitude===undefined)return;
+    gps.alt=p.coords.altitude;gps.acc=p.coords.altitudeAccuracy;gps.ts=Date.now();if(connected)altitude();
+  },()=>{},{enableHighAccuracy:true,maximumAge:5000})}catch(e){}
+}
+function altSrc(s){if(gps.src!==s){gps.src=s;hist.alt=[];delete mm.alt}}
+function altitude(){
+  const l=$('l_alt');
+  if(gps.alt!==null&&Date.now()-gps.ts<20000){
+    altSrc('gps');setVal('alt',gps.alt-geoOff);
+    if(l)l.textContent='Höhe (GPS'+(gps.acc?' ±'+Math.round(gps.acc)+' m':'')+')';
+  }else if(val['33']!==undefined){
+    altSrc('baro');setVal('alt',Math.round(44330*(1-Math.pow(val['33']/101.325,0.1903))/10)*10);
+    if(l)l.textContent='Höhe ca. (Luftdruck)';
+  }
+}
+function status01(d){
+  const mil=!!(d[0]&0x80),cnt=d[0]&0x7f;
+  chip('chipMil',mil?'MKL an · '+cnt:'MKL aus',mil?'bad':'');
+  const c=$('dtcCnt');c.hidden=!cnt;c.textContent=cnt;
+  const items=[['Fehlzündung',d[1]&1,d[1]&16],['Kraftstoffsystem',d[1]&2,d[1]&32],['Komponenten',d[1]&4,d[1]&64]];
+  if(!(d[1]&8))['Katalysator','Kat-Heizung','Tankentlüftung','Sekundärluft','Klima-Kältemittel','Lambdasonde','Sondenheizung','AGR'].forEach((n,i)=>items.push([n,d[2]&(1<<i),d[3]&(1<<i)]));
+  $('ready').innerHTML=items.filter(i=>i[1]).map(i=>`<span class="${i[2]?'open':'ok'}">${i[0]} · ${i[2]?'offen':'bereit'}</span>`).join('')||'<span>Keine Angaben</span>';
+}
+
+/* ---------- Fehlerspeicher ---------- */
+const DTC_TXT={P0010:'Nockenwellenverstellung – Stromkreis',P0011:'Nockenwellenverstellung – Soll/Ist-Abweichung',P0016:'Zuordnung Kurbelwelle/Nockenwelle',P0100:'Luftmassenmesser – Stromkreis',P0101:'Luftmassenmesser – unplausibles Signal',P0102:'Luftmassenmesser – Signal zu klein',P0106:'Saugrohrdruckgeber – unplausibles Signal',P0107:'Saugrohrdruckgeber – Signal zu klein',P0108:'Saugrohrdruckgeber – Signal zu groß',P0112:'Ansauglufttemperatur – Signal zu klein',P0113:'Ansauglufttemperatur – Signal zu groß',P0116:'Kühlmitteltemperatur – unplausibel',P0117:'Kühlmitteltemperatur – Signal zu klein',P0118:'Kühlmitteltemperatur – Signal zu groß',P0121:'Drosselklappengeber – unplausibles Signal',P0130:'Lambdasonde vor Kat – Stromkreis',P0131:'Lambdasonde vor Kat – Spannung zu niedrig',P0132:'Lambdasonde vor Kat – Spannung zu hoch',P0133:'Lambdasonde vor Kat – zu träge',P0135:'Lambdasonde vor Kat – Heizkreis',P0136:'Lambdasonde nach Kat – Stromkreis',P0138:'Lambdasonde nach Kat – Spannung zu hoch',P0140:'Lambdasonde nach Kat – keine Aktivität',P0141:'Lambdasonde nach Kat – Heizkreis',P0171:'Gemisch zu mager',P0172:'Gemisch zu fett',P0190:'Kraftstoffdruckgeber – Stromkreis',P0191:'Kraftstoffdruckgeber – unplausibles Signal',P0192:'Kraftstoffdruckgeber – Signal zu klein',P0193:'Kraftstoffdruckgeber – Signal zu groß',P0201:'Einspritzventil Zylinder 1 – Stromkreis',P0202:'Einspritzventil Zylinder 2 – Stromkreis',P0203:'Einspritzventil Zylinder 3 – Stromkreis',P0221:'Drosselklappengeber 2 – unplausibles Signal',P0300:'Verbrennungsaussetzer erkannt',P0301:'Verbrennungsaussetzer Zylinder 1',P0302:'Verbrennungsaussetzer Zylinder 2',P0303:'Verbrennungsaussetzer Zylinder 3',P0322:'Motordrehzahlgeber – kein Signal',P0327:'Klopfsensor – Signal zu klein',P0328:'Klopfsensor – Signal zu groß',P0335:'Kurbelwellensensor – Stromkreis',P0340:'Nockenwellensensor – Stromkreis',P0341:'Nockenwellensensor – unplausibles Signal',P0351:'Zündspule Zylinder 1',P0352:'Zündspule Zylinder 2',P0353:'Zündspule Zylinder 3',P0420:'Katalysator – Wirkung zu gering',P0441:'Tankentlüftung – Durchfluss fehlerhaft',P0442:'Tankentlüftung – kleines Leck',P0444:'Tankentlüftungsventil – Unterbrechung',P0455:'Tankentlüftung – großes Leck',P0456:'Tankentlüftung – sehr kleines Leck',P0501:'Geschwindigkeitssignal – unplausibel',P0506:'Leerlaufdrehzahl zu niedrig',P0507:'Leerlaufdrehzahl zu hoch',P0562:'Bordspannung zu niedrig',P0563:'Bordspannung zu hoch',P0601:'Steuergerät – Speicherfehler',P0606:'Steuergerät – Prozessorfehler',P2096:'Gemischadaption nach Kat – zu mager',P2097:'Gemischadaption nach Kat – zu fett',P2177:'Gemisch außerhalb Leerlauf – zu mager',P2178:'Gemisch außerhalb Leerlauf – zu fett',P2187:'Gemisch im Leerlauf – zu mager',P2188:'Gemisch im Leerlauf – zu fett'};
+function dtcText(c){
+  if(DTC_TXT[c])return DTC_TXT[c];
+  if(/^P[13]/.test(c))return 'Herstellerspezifischer Code (VW) – Bedeutung im VW-Fehlerverzeichnis nachschlagen.';
+  return {P:'Antrieb',C:'Fahrwerk',B:'Karosserie',U:'Datenbus'}[c[0]]+' – allgemeiner Code ohne hinterlegten Klartext.';
+}
+async function readMode(m){
+  const fr=parseFrames(await cmd(m,7000)),res=[],r=parseInt(m,16)+0x40;
+  for(const id in fr){const p=fr[id];if(p[0]!==r)continue;
+    for(let i=2;i+1<p.length;i+=2){if(!p[i]&&!p[i+1])continue;
+      const code='PCBU'[p[i]>>6]+((p[i]>>4)&3)+hex(p[i]&15,1)+hex(p[i+1]);
+      if(!res.some(x=>x.code===code))res.push({code,ecu:id});}}
+  return res;
+}
+function showDtc(el,list,kind,pend){
+  $(el).innerHTML=list.length?list.map(d=>`<div class="dtc${pend?' pend':''}"><span class="kind">${kind} · ${d.ecu}</span><div class="code">${d.code}</div><div class="txt">${dtcText(d.code)}</div></div>`).join(''):'<div class="empty">Keine Einträge. ✔</div>';
+}
+async function readDtcs(){
+  if(!connected){note('<b>Erst verbinden</b> – dann lässt sich der Fehlerspeicher auslesen.');return}
+  const b=$('btnRead');b.disabled=true;b.textContent='Lese …';
+  try{
+    showDtc('dtcStored',await readMode('03'),'gespeichert');
+    showDtc('dtcPending',await readMode('07'),'vorläufig',1);
+    showDtc('dtcPerm',await readMode('0A'),'dauerhaft');
+  }catch(e){log('Fehler: '+e.message,'er')}
+  b.disabled=false;b.textContent='🔍 Fehlerspeicher auslesen';
+}
+async function clearDtcs(){
+  $('ov').classList.remove('show');
+  try{
+    const r=await cmd('04',8000);const ok=Object.values(parseFrames(r)).some(p=>p[0]===0x44);
+    note(ok?'<b>Fehlerspeicher gelöscht.</b>':'<b>Löschen nicht bestätigt.</b> Zündung an, Motor aus, dann erneut versuchen.');
+    await readDtcs();
+  }catch(e){log('Fehler: '+e.message,'er')}
+}
+
+/* ---------- Demo-Modus ---------- */
+const demo={t0:0,cleared:false};
+function isoTp(id,p){
+  if(p.length<=7)return id+hex(p.length)+p.map(b=>hex(b)).join('');
+  const L=[id+'1'+hex(p.length,3)+p.slice(0,6).map(b=>hex(b)).join('')];
+  for(let i=6,n=1;i<p.length;i+=7,n++)L.push(id+'2'+hex(n&15,1)+p.slice(i,i+7).map(b=>hex(b)).join(''));
+  return L.join('\r');
+}
+const DSUP=['01','03','04','05','06','07','0B','0C','0D','0E','0F','10','11','15','1F','20','21','2F','31','33','34','3C','40','42','44','46','51'];
+function demoCmd(c){
+  c=c.toUpperCase().trim();
+  if(c==='ATZ')return 'ELM327 v2.3';if(c==='ATRV')return '13.9V';if(c==='ATDPN')return 'A6';if(c.startsWith('AT'))return 'OK';
+  const t=(Date.now()-demo.t0)/1000,w=Math.sin(t/7),sp=Math.max(0,62+38*w+6*Math.sin(t/1.7)),rpm=sp<3?860+20*Math.sin(t*3):1250+sp*26+90*Math.sin(t/2.3);
+  const load=28+30*Math.max(0,Math.cos(t/7))+6*Math.sin(t/1.3),maf=rpm*load/19000+1,cool=Math.min(91,24+t*1.4),b16=v=>[(v>>8)&255,v&255];
+  const m=c.slice(0,2),p=c.slice(2,4);
+  if(m==='01'){
+    if(['00','20','40'].includes(p)){const base=parseInt(p,16),d=[0,0,0,0];DSUP.forEach(s=>{const i=parseInt(s,16)-base-1;if(i>=0&&i<32)d[i>>3]|=0x80>>(i&7)});return isoTp('7E8',[0x41,base,...d])}
+    const D={'01':[demo.cleared?0:0x81,0x07,0x65,demo.cleared?0x65:0x04],'03':[cool<50?1:2,0],'04':[load*2.55],'05':[cool+40],'06':[128+4*Math.sin(t/3)],'07':[128+3.5],'0B':[32+load*.6],'0C':b16(rpm*4),'0D':[sp],'0E':[(12+8*Math.sin(t/5)+64)*2],'0F':[40+19],'10':b16(maf*100),'11':[14+load*.5],'15':[.68*200+10*Math.sin(t),255],'1F':b16(t+420),'21':b16(demo.cleared?0:37),'2F':[.62*255],'31':b16(demo.cleared?0:1840),'33':[99],'34':[...b16((1+.012*Math.sin(t*2))*32768),128,0],'3C':b16((Math.min(560,90+t*14)+40)*10),'42':b16(13920+60*Math.sin(t)),'44':b16(32768),'46':[40+11],'51':[0x0D]}[p];
+    return D?isoTp('7E8',[0x41,parseInt(p,16),...D.map(x=>Math.max(0,Math.min(255,Math.round(x))))]):'NO DATA';
+  }
+  if(c==='0902')return isoTp('7E8',[0x49,2,1,...[...'DEMO0ECOUP0123456'].map(ch=>ch.charCodeAt(0))]);
+  if(c==='03')return isoTp('7E8',demo.cleared?[0x43,0]:[0x43,1,0x01,0x36]);
+  if(c==='07')return isoTp('7E8',demo.cleared?[0x47,0]:[0x47,1,0x01,0x71]);
+  if(c==='0A')return isoTp('7E8',[0x4A,0]);
+  if(c==='04'){demo.cleared=true;return isoTp('7E8',[0x44])}
+  return 'NO DATA';
+}
+async function startDemo(){
+  if(elm.dev&&elm.dev.gatt.connected){connected=false;elm.dev.gatt.disconnect()}
+  elm.demo=true;demo.t0=Date.now();demo.cleared=false;
+  try{await startSession()}catch(e){fail(e)}
+}
+
+/* ---------- Bildschirm wach halten ---------- */
+let wake=null;
+async function keepAwake(){try{if('wakeLock' in navigator)wake=await navigator.wakeLock.request('screen')}catch(e){}}
+function releaseWake(){try{wake&&wake.release()}catch(e){}wake=null}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&connected)keepAwake()});
+
+/* ---------- Bedienung ---------- */
+$('btnConnect').onclick=()=>{
+  if(connected&&!elm.demo){connected=false;loopId++;try{elm.dev.gatt.disconnect()}catch(e){}elm.tx=null;badge('Offline');$('car').classList.remove('live');$('btnConnect').textContent='🔌 Mit iCar Pro 2S verbinden';releaseWake();return}
+  connected=false;loopId++;connect(false)};
+$('btnAll').onclick=()=>{connected=false;loopId++;connect(true)};
+$('btnDemo').onclick=()=>{connected=false;loopId++;startDemo()};
+$('tabs').onclick=e=>{const b=e.target.closest('.tab');if(!b)return;tab=b.dataset.t;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('show',p.id==='p-'+tab));
+  TILES.filter(t=>t.tab===tab).forEach(t=>spark(t.k));
+  if(tab==='dtc'&&connected&&$('dtcStored').textContent.includes('Noch nicht'))readDtcs()};
+$('btnRead').onclick=readDtcs;
+$('btnClear').onclick=()=>{if(!connected){note('<b>Erst verbinden</b> – dann lässt sich der Fehlerspeicher löschen.');return}$('ov').classList.add('show')};
+$('ovNo').onclick=()=>$('ov').classList.remove('show');
+$('ovYes').onclick=clearDtcs;
+function paintSeg(){document.querySelectorAll('#fuelSeg button').forEach(b=>b.classList.toggle('active',b.dataset.f===fuelSel))}
+$('fuelSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;fuelSel=b.dataset.f;try{localStorage.setItem('ecoup_fuel',fuelSel)}catch(_){}
+  paintSeg();hist.cons=[];hist.consH=[];delete mm.cons;delete mm.consH;if(connected)derive()};
+$('altForm').onsubmit=e=>{e.preventDefault();const h=parseFloat($('altIn').value.replace(',','.'));
+  if(!isFinite(h)){$('altMsg').textContent='Bitte eine Zahl eintragen.';return}
+  if(gps.alt===null||Date.now()-gps.ts>20000){$('altMsg').textContent='Abgleich geht nur mit GPS-Empfang.';return}
+  geoOff=gps.alt-h;try{localStorage.setItem('ecoup_geo',geoOff)}catch(_){}
+  gps.src='';altitude();$('altIn').value='';$('altMsg').textContent='Abgeglichen.'};
+$('altReset').onclick=()=>{geoOff=GEOID_DE;try{localStorage.removeItem('ecoup_geo')}catch(_){}gps.src='';if(connected)altitude();$('altMsg').textContent='Zurückgesetzt.'};
+$('cmdForm').onsubmit=async e=>{e.preventDefault();const i=$('cmdIn'),c=i.value.trim().toUpperCase();if(!c)return;i.value='';
+  if(!connected){log('Nicht verbunden.','er');return}
+  if(/^(04|AT\s*(SP|Z|D|WS|PP|MA|PC))/.test(c.replace(/\s/g,''))&&c.replace(/\s/g,'')!=='ATDPN'&&c.replace(/\s/g,'')!=='ATDP'){log('Dieser Befehl ist in der Konsole gesperrt (ändert Adapter oder Fehlerspeicher).','er');return}
+  try{await cmd(c,6000)}catch(err){log('Fehler: '+err.message,'er')}};
+['ATRV','ATDP','ATI','0100','0105','0151','012F','0902'].forEach(q=>{const b=document.createElement('button');b.type='button';b.textContent=q;b.onclick=()=>{$('cmdIn').value=q;$('cmdForm').requestSubmit()};$('quick').appendChild(b)});
+window.addEventListener('resize',()=>TILES.forEach(t=>spark(t.k)));
+
+buildTiles();paintSeg();
+if(!navigator.bluetooth)showBtNote();
+</script>
+</body>
+</html>
