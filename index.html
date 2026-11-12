@@ -84,7 +84,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-
 </head>
 <body>
 <h1 class="title">eco up! · Fahrzeugdaten</h1>
-<div class="sub">VW eco up! CNG · vGate iCar Pro 2S · Version 4</div>
+<div class="sub">VW eco up! CNG · vGate iCar Pro 2S · Version 6</div>
 
 <section class="hero">
   <div class="state"><span class="badge" id="badge">Offline</span></div>
@@ -124,7 +124,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-
 
 <section class="panel" id="p-cng">
   <div class="grid" id="g-cng"></div>
-  <div class="note"><b>Verbrauch:</b> grob geschätzt. Der eco up! meldet keine Luftmasse, deshalb wird sie aus Saugrohrdruck, Drehzahl und Ansaugluft berechnet – ein Richtwert, kein Messwert.<br><b>Rail-Druck (Test):</b> Druck an der Einblasleiste laut Steuergerät, noch nicht am Fahrzeug bestätigt. Das ist nicht der Tankdruck.<br>
+  <div class="note"><b>Verbrauch:</b> geschätzt aus der Luftfüllung, die das Steuergerät meldet (absolute Last × Drehzahl), geteilt durch 17,2 für CNG – ein Richtwert, kein Messwert. „Ø seit Verbindung“ erscheint nach 300 m und ist der Wert zum Vergleichen mit dem Bordcomputer.<br><b>Rail-Druck (Test):</b> Druck an der Einblasleiste laut Steuergerät, noch nicht am Fahrzeug bestätigt. Das ist nicht der Tankdruck.<br>
   <b>Kraftstoff für die Rechnung:</b>
     <div class="seg" id="fuelSeg"><button data-f="auto" class="active">Automatisch</button><button data-f="cng">CNG</button><button data-f="benzin">Benzin</button></div>
   </div>
@@ -197,18 +197,19 @@ const TILES=[
  {k:'1F',tab:'motor',lab:'Laufzeit seit Start',u:'min',f:d=>u16(d)/60},
 
  {k:'fuel',tab:'cng',lab:'Aktueller Kraftstoff',txt:1,wide:1,deps:['51']},
- {k:'cons',tab:'cng',lab:'Verbrauch (geschätzt)',u:'kg/100 km',dec:1,deps:['10','0B','0C','0F','44','0D','51']},
- {k:'consH',tab:'cng',lab:'Verbrauch pro Stunde',u:'kg/h',dec:2,deps:['10','0B','0C','0F','44','51']},
+ {k:'cons',tab:'cng',lab:'Verbrauch (geschätzt)',u:'kg/100 km',dec:1,deps:['10','43','0B','0C','0F','44','0D','51']},
+ {k:'consH',tab:'cng',lab:'Verbrauch pro Stunde',u:'kg/h',dec:2,deps:['10','43','0B','0C','0F','44','51']},
+ {k:'avg',tab:'cng',lab:'Ø seit Verbindung',u:'kg/100 km',dec:1,deps:['0D']},
  {k:'2F',tab:'cng',lab:'Tankfüllstand (OBD)',u:'%',f:d=>d[0]*100/255},
  {k:'0D',tab:'cng',lab:'Geschwindigkeit',u:'km/h',f:d=>d[0]},
- {k:'loop',tab:'cng',lab:'Gemischregelung',txt:1,wide:1,deps:['03']},
  {k:'6D',tab:'cng',lab:'Rail-Druck (Test)',u:'bar',dec:1,f:d=>(d[0]&2)&&d.length>=5?(d[3]*256+d[4])/10:NaN},
  {k:'2E',tab:'cng',lab:'Tankentlüftung',u:'%',f:d=>d[0]*100/255},
- {k:'alt',tab:'cng',lab:'Höhe',u:'m',deps:['33']},
+ {k:'loop',tab:'cng',lab:'Gemischregelung',txt:1,wide:1,deps:['03']},
+ {k:'alt',tab:'cng',lab:'Höhe',u:'m',wide:1,deps:['33']},
 
  {k:'21',tab:'dtc',lab:'km mit Kontrollleuchte',u:'km',f:u16},
- {k:'31',tab:'dtc',lab:'km seit Löschen',u:'km',f:u16},
- {k:'30',tab:'dtc',lab:'Warmläufe seit Löschen',u:'',f:d=>d[0]},
+ {k:'31',tab:'dtc',lab:'km seit Löschen',u:'km',f:u16,sat:65535},
+ {k:'30',tab:'dtc',lab:'Warmläufe seit Löschen',u:'',f:d=>d[0],sat:255},
 ];
 const RAWP={'51':d=>d[0],'03':d=>d[0],'33':d=>d[0]};
 const TILE={};TILES.forEach(t=>TILE[t.k]=t);
@@ -236,8 +237,8 @@ function isAvail(t){
   if(t.k==='RV')return !supported.has('42');
   if(t.k==='alt')return true;
   const deps=t.deps||[t.k];
-  const air=supported.has('10')||['0B','0C','0F'].every(p=>supported.has(p));
-  if(t.k==='cons')return air&&supported.has('0D');
+  const air=supported.has('10')||['43','0C'].every(p=>supported.has(p))||['0B','0C','0F'].every(p=>supported.has(p));
+  if(t.k==='cons'||t.k==='avg')return air&&supported.has('0D');
   if(t.k==='consH')return air;
   if(t.k==='fuel')return true;
   return deps.every(p=>supported.has(p));
@@ -256,7 +257,7 @@ function paint(k){
   if(v===null||v===undefined||(typeof v==='number'&&!isFinite(v))){e.textContent='–';e.className='val'+(t.txt?' txt':'');return}
   if(t.txt){e.textContent=v;return}
   e.className='val '+(t.cls?t.cls(v):'');
-  e.innerHTML=fmt(v,t.dec||0)+`<span class="u">${t.u}</span>`;
+  e.innerHTML=(t.sat&&v>=t.sat?'über ':'')+fmt(v,t.dec||0)+`<span class="u">${t.u}</span>`;
   const s=$('s_'+k);if(s&&mm[k])s.textContent=`min ${fmt(mm[k].lo,t.dec||0)} · max ${fmt(mm[k].hi,t.dec||0)}`;
   spark(k);
 }
@@ -423,21 +424,29 @@ function fuelNow(){ // 'cng' | 'benzin' | null
 function derive(){
   const f=val['51'];
   if(supported&&!supported.has('51')){setVal('fuel','Vom Steuergerät nicht gemeldet');chip('chipFuel',fuelSel==='auto'?'Kraftstoff ?':fuelSel,'mute')}
-  else if(f!==undefined){setVal('fuel',FUEL[f]||('Kennung '+f));const n=fuelNow();chip('chipFuel',n==='cng'?'CNG':n==='benzin'?'Benzin':'Kraftstoff ?',n==='benzin'?'warn':n?'':'mute')}
+  else if(f!==undefined){setVal('fuel',FUEL[f]||('Kennung '+f));const n=(f===6||f===0x0D)?'cng':(f===1||f===9)?'benzin':null;chip('chipFuel',n==='cng'?'CNG':n==='benzin'?'Benzin':'Kraftstoff ?',n==='benzin'?'warn':n?'':'mute')}
   const fs=val['03'];
   if(fs!==undefined)setVal('loop',{1:'Offen · Motor noch kalt',2:'Geschlossen · Lambdaregelung aktiv',4:'Offen · Last / Schubabschaltung',8:'Offen · Systemfehler',16:'Geschlossen · Sondenfehler'}[fs]||('Status '+fs));
   altitude();
   let maf=supported&&supported.has('10')?val['10']:undefined;
-  if(maf===undefined&&val['0B']!==undefined&&val['0C']!==undefined&&val['0F']!==undefined) // ohne Luftmassenmesser: aus Saugrohrdruck, Drehzahl, Ansaugluft (1,0 l, Füllungsgrad 0,85)
+  if(maf===undefined&&supported&&supported.has('43')&&val['43']!==undefined&&val['0C']!==undefined)
+    maf=val['43']/100*1.184*0.999*val['0C']/120; // Luftfüllung laut Steuergerät (absolute Last), 1,0 l Hubraum
+  else if(maf===undefined&&val['0B']!==undefined&&val['0C']!==undefined&&val['0F']!==undefined)
     maf=val['0C']/120*0.999*0.85*val['0B']*1000/(287*(val['0F']+273.15));
   const lam=val['44']||1,sp=val['0D'],fn=fuelNow();
-  TILE.cons.u=fn==='benzin'?'l/100 km':'kg/100 km';TILE.consH.u=fn==='benzin'?'l/h':'kg/h';
+  const un=fn==='benzin'?'l':'kg';TILE.cons.u=TILE.avg.u=un+'/100 km';TILE.consH.u=un+'/h';
   if(maf!==undefined&&fn){
-    const perH=fn==='cng'?maf*3.6/(17.2*lam):maf*3600/(14.7*lam*745);
+    const perH=lam>=1.99?0:(fn==='cng'?maf*3.6/(17.2*lam):maf*3600/(14.7*lam*745)); // Lambda-Soll 2,0 = Schubabschaltung
     setVal('consH',perH);
     if(sp!==undefined&&sp>=5)setVal('cons',perH/sp*100);else{val.cons=null;paint('cons')}
+    const now=Date.now();
+    if(trip.fuel!==fn){trip.fuel=fn;trip.q=0;trip.km=0;hist.avg=[];delete mm.avg;val.avg=null;paint('avg')}
+    else if(trip.t&&sp!==undefined){const dt=Math.min(5,(now-trip.t)/1000);trip.q+=perH*dt/3600;trip.km+=sp*dt/3600;
+      if(trip.km>=0.3)setVal('avg',trip.q/trip.km*100)}
+    trip.t=now;
   }
 }
+const trip={t:0,q:0,km:0,fuel:null};
 /* ---------- Höhe: GPS des Handys, ersatzweise grob aus dem Luftdruck ---------- */
 const GEOID_DE=46; // GPS liefert Höhe über dem Ellipsoid; in Deutschland liegt sie rund 46 m über der Höhe über NN
 const gps={alt:null,acc:null,ts:0,watch:null,src:''};
