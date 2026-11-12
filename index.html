@@ -38,6 +38,7 @@ button{font:inherit;cursor:pointer}
 .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0 12px;position:sticky;top:0;background:#000;padding:8px 0;z-index:5}
 .tab{font-family:Arial,sans-serif;font-size:14px;font-weight:600;color:var(--pink);background:rgba(255,20,147,.08);border:1px solid var(--pink-dim);border-radius:10px;padding:10px 4px}
 .tab.active{color:var(--green);background:rgba(57,255,20,.12);border-color:var(--green);box-shadow:0 0 15px rgba(57,255,20,.6)}
+.tab .cnt[hidden]{display:none}
 .tab .cnt{display:inline-block;min-width:18px;border-radius:9px;background:var(--red);color:#fff;font-size:11px;padding:1px 5px;margin-left:3px}
 .grid{display:grid;gap:11px;grid-template-columns:repeat(2,minmax(0,1fr))}
 @media(min-width:620px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
@@ -83,7 +84,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-
 </head>
 <body>
 <h1 class="title">eco up! · Fahrzeugdaten</h1>
-<div class="sub">VW eco up! CNG · vGate iCar Pro 2S · Pixel 10 Pro</div>
+<div class="sub">VW eco up! CNG · vGate iCar Pro 2S · Version 4</div>
 
 <section class="hero">
   <div class="state"><span class="badge" id="badge">Offline</span></div>
@@ -123,7 +124,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-
 
 <section class="panel" id="p-cng">
   <div class="grid" id="g-cng"></div>
-  <div class="note"><b>Verbrauch:</b> aus Luftmasse und Lambda geschätzt (CNG 17,2 : 1, Benzin 14,7 : 1) – ein Richtwert, kein Messwert.<br>
+  <div class="note"><b>Verbrauch:</b> grob geschätzt. Der eco up! meldet keine Luftmasse, deshalb wird sie aus Saugrohrdruck, Drehzahl und Ansaugluft berechnet – ein Richtwert, kein Messwert.<br><b>Rail-Druck (Test):</b> Druck an der Einblasleiste laut Steuergerät, noch nicht am Fahrzeug bestätigt. Das ist nicht der Tankdruck.<br>
   <b>Kraftstoff für die Rechnung:</b>
     <div class="seg" id="fuelSeg"><button data-f="auto" class="active">Automatisch</button><button data-f="cng">CNG</button><button data-f="benzin">Benzin</button></div>
   </div>
@@ -180,6 +181,8 @@ const TILES=[
  {k:'0C',tab:'motor',lab:'Drehzahl',u:'1/min',f:d=>u16(d)/4},
  {k:'04',tab:'motor',lab:'Motorlast',u:'%',f:d=>d[0]*100/255},
  {k:'11',tab:'motor',lab:'Drosselklappe',u:'%',f:d=>d[0]*100/255},
+ {k:'49',tab:'motor',lab:'Gaspedal',u:'%',f:d=>d[0]*100/255},
+ {k:'43',tab:'motor',lab:'Absolute Last',u:'%',f:d=>u16(d)*100/255},
  {k:'0E',tab:'motor',lab:'Zündwinkel',u:'° v. OT',dec:1,f:d=>d[0]/2-64},
  {k:'0B',tab:'motor',lab:'Saugrohrdruck',u:'kPa',f:d=>d[0]},
  {k:'10',tab:'motor',lab:'Luftmasse',u:'g/s',dec:1,f:d=>u16(d)/100},
@@ -190,18 +193,22 @@ const TILES=[
  {k:'15',tab:'motor',lab:'Sonde nach Kat',u:'V',dec:2,f:d=>d[0]/200},
  {k:'06',tab:'motor',lab:'Gemisch kurz',u:'%',dec:1,f:d=>(d[0]-128)*100/128,cls:v=>Math.abs(v)>15?'hot':Math.abs(v)>8?'mid':'good'},
  {k:'07',tab:'motor',lab:'Gemisch lang',u:'%',dec:1,f:d=>(d[0]-128)*100/128,cls:v=>Math.abs(v)>15?'hot':Math.abs(v)>8?'mid':'good'},
+ {k:'56',tab:'motor',lab:'Gemisch lang nach Kat',u:'%',dec:1,f:d=>(d[0]-128)*100/128,cls:v=>Math.abs(v)>15?'hot':Math.abs(v)>8?'mid':'good'},
  {k:'1F',tab:'motor',lab:'Laufzeit seit Start',u:'min',f:d=>u16(d)/60},
 
  {k:'fuel',tab:'cng',lab:'Aktueller Kraftstoff',txt:1,wide:1,deps:['51']},
- {k:'cons',tab:'cng',lab:'Verbrauch (geschätzt)',u:'kg/100 km',dec:1,deps:['10','44','0D','51']},
- {k:'consH',tab:'cng',lab:'Verbrauch pro Stunde',u:'kg/h',dec:2,deps:['10','44','51']},
+ {k:'cons',tab:'cng',lab:'Verbrauch (geschätzt)',u:'kg/100 km',dec:1,deps:['10','0B','0C','0F','44','0D','51']},
+ {k:'consH',tab:'cng',lab:'Verbrauch pro Stunde',u:'kg/h',dec:2,deps:['10','0B','0C','0F','44','51']},
  {k:'2F',tab:'cng',lab:'Tankfüllstand (OBD)',u:'%',f:d=>d[0]*100/255},
  {k:'0D',tab:'cng',lab:'Geschwindigkeit',u:'km/h',f:d=>d[0]},
  {k:'loop',tab:'cng',lab:'Gemischregelung',txt:1,wide:1,deps:['03']},
+ {k:'6D',tab:'cng',lab:'Rail-Druck (Test)',u:'bar',dec:1,f:d=>(d[0]&2)&&d.length>=5?(d[3]*256+d[4])/10:NaN},
+ {k:'2E',tab:'cng',lab:'Tankentlüftung',u:'%',f:d=>d[0]*100/255},
  {k:'alt',tab:'cng',lab:'Höhe',u:'m',deps:['33']},
 
  {k:'21',tab:'dtc',lab:'km mit Kontrollleuchte',u:'km',f:u16},
  {k:'31',tab:'dtc',lab:'km seit Löschen',u:'km',f:u16},
+ {k:'30',tab:'dtc',lab:'Warmläufe seit Löschen',u:'',f:d=>d[0]},
 ];
 const RAWP={'51':d=>d[0],'03':d=>d[0],'33':d=>d[0]};
 const TILE={};TILES.forEach(t=>TILE[t.k]=t);
@@ -214,7 +221,7 @@ function buildTiles(){
   for(const g of ['motor','cng','dtc']){
     const el=$('g-'+g);el.innerHTML='';
     for(const t of TILES.filter(t=>t.tab===g)){
-      if(supported&&!isAvail(t)){ if(t.k==='24'||t.k==='34'||t.k==='RV'||t.k==='5C'||t.k==='46'||t.k==='3C'||t.k==='15')continue; }
+      if(supported&&!isAvail(t))continue;
       if(!supported&&(t.k==='24'||t.k==='RV'))continue;
       const d=document.createElement('div');
       d.className='tile'+(t.wide?' wide':'')+(supported&&!isAvail(t)?' off':'');d.id='t_'+t.k;
@@ -229,8 +236,10 @@ function isAvail(t){
   if(t.k==='RV')return !supported.has('42');
   if(t.k==='alt')return true;
   const deps=t.deps||[t.k];
-  if(t.k==='cons')return supported.has('10')&&supported.has('0D');
-  if(t.k==='consH')return supported.has('10');
+  const air=supported.has('10')||['0B','0C','0F'].every(p=>supported.has(p));
+  if(t.k==='cons')return air&&supported.has('0D');
+  if(t.k==='consH')return air;
+  if(t.k==='fuel')return true;
   return deps.every(p=>supported.has(p));
 }
 function setVal(k,v){
@@ -374,7 +383,8 @@ async function startSession(){
   $('btnConnect').textContent=elm.demo?'🔌 Mit iCar Pro 2S verbinden':'⏏ Verbindung trennen';
   keepAwake();startGps();
   try{const v=await obd('0902',6000);if(v){const s=String.fromCharCode(...v.slice(1).filter(c=>c>=32&&c<127));if(s.length>=11)chip('chipVin','VIN …'+s.slice(-6),'')}}catch(e){}
-  loop();
+  for(const p of ['51','01']){try{if(supported.has(p)){const d=await obd('01'+p);if(d){if(p==='01')status01(d);else val[p]=d[0]}}}catch(e){}}
+  derive();loop();
 }
 function chip(id,t,c){const e=$(id);e.textContent=t;e.className='chip '+(c||'')}
 
@@ -417,7 +427,10 @@ function derive(){
   const fs=val['03'];
   if(fs!==undefined)setVal('loop',{1:'Offen · Motor noch kalt',2:'Geschlossen · Lambdaregelung aktiv',4:'Offen · Last / Schubabschaltung',8:'Offen · Systemfehler',16:'Geschlossen · Sondenfehler'}[fs]||('Status '+fs));
   altitude();
-  const maf=val['10'],lam=val['44']||1,sp=val['0D'],fn=fuelNow();
+  let maf=supported&&supported.has('10')?val['10']:undefined;
+  if(maf===undefined&&val['0B']!==undefined&&val['0C']!==undefined&&val['0F']!==undefined) // ohne Luftmassenmesser: aus Saugrohrdruck, Drehzahl, Ansaugluft (1,0 l, Füllungsgrad 0,85)
+    maf=val['0C']/120*0.999*0.85*val['0B']*1000/(287*(val['0F']+273.15));
+  const lam=val['44']||1,sp=val['0D'],fn=fuelNow();
   TILE.cons.u=fn==='benzin'?'l/100 km':'kg/100 km';TILE.consH.u=fn==='benzin'?'l/h':'kg/h';
   if(maf!==undefined&&fn){
     const perH=fn==='cng'?maf*3.6/(17.2*lam):maf*3600/(14.7*lam*745);
@@ -433,7 +446,10 @@ function startGps(){
   if(gps.watch!==null||!navigator.geolocation)return;
   try{gps.watch=navigator.geolocation.watchPosition(p=>{
     if(p.coords.altitude===null||p.coords.altitude===undefined)return;
-    gps.alt=p.coords.altitude;gps.acc=p.coords.altitudeAccuracy;gps.ts=Date.now();if(connected)altitude();
+    if(p.coords.accuracy>30)return; // ungenaue erste Ortungen verwerfen
+    (gps.buf=gps.buf||[]).push(p.coords.altitude);if(gps.buf.length>5)gps.buf.shift();
+    gps.alt=[...gps.buf].sort((x,y)=>x-y)[gps.buf.length>>1]; // Median der letzten 5 Werte glättet Sprünge
+    gps.acc=p.coords.altitudeAccuracy;gps.ts=Date.now();if(connected)altitude();
   },()=>{},{enableHighAccuracy:true,maximumAge:5000})}catch(e){}
 }
 function altSrc(s){if(gps.src!==s){gps.src=s;hist.alt=[];delete mm.alt}}
@@ -560,7 +576,7 @@ $('cmdForm').onsubmit=async e=>{e.preventDefault();const i=$('cmdIn'),c=i.value.
   if(!connected){log('Nicht verbunden.','er');return}
   if(/^(04|AT\s*(SP|Z|D|WS|PP|MA|PC))/.test(c.replace(/\s/g,''))&&c.replace(/\s/g,'')!=='ATDPN'&&c.replace(/\s/g,'')!=='ATDP'){log('Dieser Befehl ist in der Konsole gesperrt (ändert Adapter oder Fehlerspeicher).','er');return}
   try{await cmd(c,6000)}catch(err){log('Fehler: '+err.message,'er')}};
-['ATRV','ATDP','ATI','0100','0105','0151','012F','0902'].forEach(q=>{const b=document.createElement('button');b.type='button';b.textContent=q;b.onclick=()=>{$('cmdIn').value=q;$('cmdForm').requestSubmit()};$('quick').appendChild(b)});
+['ATRV','ATDP','ATI','0100','0105','0151','016D','0902'].forEach(q=>{const b=document.createElement('button');b.type='button';b.textContent=q;b.onclick=()=>{$('cmdIn').value=q;$('cmdForm').requestSubmit()};$('quick').appendChild(b)});
 window.addEventListener('resize',()=>TILES.forEach(t=>spark(t.k)));
 
 buildTiles();paintSeg();
