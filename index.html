@@ -78,13 +78,15 @@ input[type=text]{font-family:var(--mono);font-size:16px;background:#000;color:#f
 .ov.show{display:flex}
 .dlg{background:#050505;border:1.5px solid var(--pink);border-radius:18px;box-shadow:0 0 26px rgba(255,20,147,.5);padding:18px;max-width:420px;width:100%}
 .dlg h3{margin:0 0 8px;font-size:18px}.dlg p{color:#cfcfcf;font-size:13.5px;line-height:1.5;margin:0 0 14px}
+.smrow{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px;color:#cfcfcf}
+.smrow b{color:#fff;white-space:nowrap}.smrow b.good{color:var(--green)}.smrow b.mid{color:var(--orange)}.smrow b.hot{color:var(--red)}
 .foot{color:#666;font-size:11px;text-align:center;margin-top:26px;line-height:1.5}
 button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-offset:2px}
 </style>
 </head>
 <body>
 <h1 class="title">eco up! · Fahrzeugdaten</h1>
-<div class="sub">VW eco up! CNG · vGate iCar Pro 2S · Version 6</div>
+<div class="sub">VW eco up! CNG · vGate iCar Pro 2S · Version 7</div>
 
 <section class="hero">
   <div class="state"><span class="badge" id="badge">Offline</span></div>
@@ -120,7 +122,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-
   <button class="tab" data-t="con">Konsole</button>
 </nav>
 
-<section class="panel show" id="p-motor"><div class="grid" id="g-motor"></div></section>
+<section class="panel show" id="p-motor"><div class="grid" id="g-motor"></div>
+  <div class="btns" style="margin-top:14px"><button class="wbtn" id="btnSm">🔋 Startmessung · Batterie &amp; Lichtmaschine</button></div>
+  <div id="smRes"></div>
+</section>
 
 <section class="panel" id="p-cng">
   <div class="grid" id="g-cng"></div>
@@ -159,6 +164,13 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-
   <h3>Fehlerspeicher wirklich löschen?</h3>
   <p>Das löscht alle Fehlercodes, die Freeze-Frame-Daten und setzt die Prüfbereitschaft zurück – kurz vor der HU ist das ungünstig. Zündung an, Motor aus. Das lässt sich nicht rückgängig machen.</p>
   <div class="row2"><button class="ghost" id="ovNo">Abbrechen</button><button class="efb" id="ovYes">Löschen</button></div>
+</div></div>
+
+<div class="ov" id="ovS"><div class="dlg">
+  <h3>Startmessung</h3>
+  <p id="smTxt"></p>
+  <div class="val" id="smV" style="font-size:44px;text-align:center;margin-bottom:14px">–</div>
+  <button class="ghost" id="smX" style="width:100%">Abbrechen</button>
 </div></div>
 
 <div class="foot">Nur lesen und anzeigen – Bedienung während der Fahrt bitte dem Beifahrer überlassen.<br>Eigenes Projekt, keine Verbindung zu Volkswagen oder vGate.</div>
@@ -395,7 +407,7 @@ async function loop(){
   const me=++loopId;let n=0;
   while(connected&&me===loopId){
     try{
-      if(tab==='con'){await sleep(300);continue}
+      if(tab==='con'||measuring){await sleep(300);continue}
       const want=new Set();
       TILES.filter(t=>t.tab===tab).forEach(t=>(t.deps||[t.k]).forEach(p=>want.add(p)));
       if(n%6===0){want.add('51');want.add('01')}
@@ -518,8 +530,62 @@ async function clearDtcs(){
   }catch(e){log('Fehler: '+e.message,'er')}
 }
 
+/* ---------- Startmessung: Ruhespannung, Einbruch beim Anlassen, Ladespannung ---------- */
+let measuring=false,smAbort=false;
+const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:NaN;
+async function volt(){const m=(await cmd('ATRV',1500)).match(/\d+\.?\d*/);const v=m?parseFloat(m[0]):null;if(v)$('smV').innerHTML=fmt(v,1)+'<span class="u">V</span>';return v}
+async function rpmNow(){try{const d=await obd('010C',1500);return d?u16(d)/4:0}catch(e){return 0}}
+function smEnd(msg){measuring=false;demo.sm=0;if(msg){$('smTxt').textContent=msg;$('smX').textContent='Schließen'}else $('ovS').classList.remove('show')}
+function smChk(){if(smAbort||!connected)throw new Error('abbruch')}
+async function startMeasure(){
+  if(!connected){note('<b>Erst verbinden</b> – dann lässt sich die Startmessung durchführen.');return}
+  if(measuring)return;
+  measuring=true;smAbort=false;$('smX').textContent='Abbrechen';$('smV').textContent='–';
+  $('smTxt').textContent='Vorbereitung …';$('ovS').classList.add('show');
+  try{
+    if(elm.demo)demo.sm=Date.now();
+    await sleep(400);
+    if(await rpmNow()>300){smEnd('Der Motor läuft schon. Bitte abstellen, Zündung wieder einschalten und die Messung neu starten.');return}
+    $('smTxt').textContent='Schritt 1 von 3: Ruhespannung wird gemessen. Motor noch nicht starten.';
+    const rest=[];let t=Date.now();
+    while(Date.now()-t<3000){smChk();const v=await volt();if(v)rest.push(v)}
+    const vRest=avg(rest);
+    $('smTxt').textContent='Schritt 2 von 3: Jetzt den Motor starten.';
+    let vMin=vRest,tCrank=0,tRun=0,i=0;t=Date.now();
+    while(!tRun){
+      smChk();if(Date.now()-t>60000){smEnd('Kein Motorstart erkannt. Messung beendet.');return}
+      const v=await volt();if(v){if(v<vMin)vMin=v;if(!tCrank&&v<vRest-0.8)tCrank=Date.now()}
+      if(i++%2){const r=await rpmNow();if(r>0&&!tCrank)tCrank=Date.now();if(r>=600)tRun=Date.now()}
+    }
+    const ch=[];
+    while(Date.now()-tRun<20000){
+      smChk();const left=Math.ceil((20000-(Date.now()-tRun))/1000);
+      $('smTxt').textContent='Schritt 3 von 3: Motor läuft. Ladespannung wird gemessen – noch '+left+' s im Leerlauf lassen.';
+      const v=await volt();if(v&&Date.now()-tRun>14000)ch.push(v);
+    }
+    const res={d:Date.now(),rest:vRest,min:vMin,dur:tCrank?(tRun-tCrank)/1000:null,chg:avg(ch)};
+    try{localStorage.setItem('ecoup_sm',JSON.stringify(res))}catch(e){}
+    showSm(res);smEnd();
+  }catch(e){if(e.message==='abbruch')smEnd();else{log('Fehler: '+e.message,'er');smEnd('Messung abgebrochen: '+e.message)}}
+}
+function showSm(r){
+  const row=(l,v,c,t)=>`<div class="smrow"><span>${l}<br><small style="color:#8a8a8a">${t}</small></span><b class="${c}">${v}</b></div>`;
+  const cR=r.rest>=12.4?'good':r.rest>=12?'mid':'hot',cM=r.min>=9.6?'good':r.min>=9?'mid':'hot',cC=r.chg>=13.5?'good':r.chg>=13?'mid':'hot';
+  const verdict=cC==='hot'?'Die Lichtmaschine lädt nicht ausreichend – Lichtmaschine, Regler, Riemen und Masseverbindung prüfen lassen.':
+    cC==='mid'?'Ladespannung grenzwertig – Messung mit eingeschaltetem Licht und Heckscheibenheizung wiederholen.':
+    (cM==='hot'||cR==='hot')?'Die Lichtmaschine lädt, aber die Batterie ist schwach oder nicht voll geladen.':
+    (cM==='mid'||cR==='mid')?'Die Lichtmaschine lädt. Die Batterie ist nicht ganz voll oder bricht beim Start etwas stark ein.':'Unauffällig: Batterie und Lichtmaschine arbeiten normal.';
+  $('smRes').innerHTML=`<div class="tile" style="margin-top:11px;padding-bottom:10px"><div class="lab">Letzte Startmessung · ${new Date(r.d).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'})}</div>
+    <div class="val txt">${verdict}</div>`+
+    row('Ruhespannung',fmt(r.rest,1)+' V',cR,'Zündung an, Motor aus · gut ab 12,4 V')+
+    row('Tiefster Wert beim Anlassen',fmt(r.min,1)+' V',cM,'gut ab 9,6 V')+
+    (r.dur!==null?row('Startdauer',fmt(r.dur,1)+' s','','vom Spannungseinbruch bis 600 1/min'):'')+
+    row('Ladespannung im Leerlauf',fmt(r.chg,1)+' V',cC,'gut ab 13,5 V')+
+    `<div class="stats" style="margin-top:6px;line-height:1.4">Der Adapter misst nur einige Male pro Sekunde und auf 0,1 V genau. Der wahre Einbruch beim Anlassen kann tiefer liegen.</div></div>`;
+}
+
 /* ---------- Demo-Modus ---------- */
-const demo={t0:0,cleared:false};
+const demo={t0:0,cleared:false,sm:0};
 function isoTp(id,p){
   if(p.length<=7)return id+hex(p.length)+p.map(b=>hex(b)).join('');
   const L=[id+'1'+hex(p.length,3)+p.slice(0,6).map(b=>hex(b)).join('')];
@@ -529,6 +595,9 @@ function isoTp(id,p){
 const DSUP=['01','03','04','05','06','07','0B','0C','0D','0E','0F','10','11','15','1F','20','21','2F','31','33','34','3C','40','42','44','46','51'];
 function demoCmd(c){
   c=c.toUpperCase().trim();
+  if(demo.sm){const e=(Date.now()-demo.sm)/1000;
+    if(c==='ATRV')return (e<5?12.5:e<6.2?9.8+Math.random()*.6:Math.min(14.1,12.8+(e-6.2)*.4)).toFixed(1)+'V';
+    if(c==='010C'){const r=(e<5?0:e<6.2?200:900)*4;return isoTp('7E8',[0x41,0x0C,r>>8,r&255])}}
   if(c==='ATZ')return 'ELM327 v2.3';if(c==='ATRV')return '13.9V';if(c==='ATDPN')return 'A6';if(c.startsWith('AT'))return 'OK';
   const t=(Date.now()-demo.t0)/1000,w=Math.sin(t/7),sp=Math.max(0,62+38*w+6*Math.sin(t/1.7)),rpm=sp<3?860+20*Math.sin(t*3):1250+sp*26+90*Math.sin(t/2.3);
   const load=28+30*Math.max(0,Math.cos(t/7))+6*Math.sin(t/1.3),maf=rpm*load/19000+1,cool=Math.min(91,24+t*1.4),b16=v=>[(v>>8)&255,v&255];
@@ -569,6 +638,9 @@ $('tabs').onclick=e=>{const b=e.target.closest('.tab');if(!b)return;tab=b.datase
   TILES.filter(t=>t.tab===tab).forEach(t=>spark(t.k));
   if(tab==='dtc'&&connected&&$('dtcStored').textContent.includes('Noch nicht'))readDtcs()};
 $('btnRead').onclick=readDtcs;
+$('btnSm').onclick=startMeasure;
+$('smX').onclick=()=>{if(measuring)smAbort=true;else $('ovS').classList.remove('show')};
+try{const r=JSON.parse(localStorage.getItem('ecoup_sm'));if(r&&r.d)showSm(r)}catch(e){}
 $('btnClear').onclick=()=>{if(!connected){note('<b>Erst verbinden</b> – dann lässt sich der Fehlerspeicher löschen.');return}$('ov').classList.add('show')};
 $('ovNo').onclick=()=>$('ov').classList.remove('show');
 $('ovYes').onclick=clearDtcs;
