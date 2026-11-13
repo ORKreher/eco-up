@@ -86,7 +86,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-
 </head>
 <body>
 <h1 class="title">eco up! · Fahrzeugdaten</h1>
-<div class="sub">VW eco up! CNG · vGate iCar Pro 2S · Version 7</div>
+<div class="sub">VW eco up! CNG · vGate iCar Pro 2S · Version 8</div>
 
 <section class="hero">
   <div class="state"><span class="badge" id="badge">Offline</span></div>
@@ -123,6 +123,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-
 </nav>
 
 <section class="panel show" id="p-motor"><div class="grid" id="g-motor"></div>
+  <div id="chgRes"></div>
   <div class="btns" style="margin-top:14px"><button class="wbtn" id="btnSm">🔋 Startmessung · Batterie &amp; Lichtmaschine</button></div>
   <div id="smRes"></div>
 </section>
@@ -410,7 +411,8 @@ async function loop(){
       if(tab==='con'||measuring){await sleep(300);continue}
       const want=new Set();
       TILES.filter(t=>t.tab===tab).forEach(t=>(t.deps||[t.k]).forEach(p=>want.add(p)));
-      if(n%6===0){want.add('51');want.add('01')}
+      if(n%6===0){want.add('51');want.add('01');want.add('05')}
+      want.add('0C');want.add(supported.has('42')?'42':'RV');
       for(const p of want){
         if(!connected||me!==loopId)return;
         if(p==='RV'){if(!supported.has('42')){const m=(await cmd('ATRV')).match(/[\d.]+/);if(m)setVal('RV',parseFloat(m[0]))}continue}
@@ -439,7 +441,7 @@ function derive(){
   else if(f!==undefined){setVal('fuel',FUEL[f]||('Kennung '+f));const n=(f===6||f===0x0D)?'cng':(f===1||f===9)?'benzin':null;chip('chipFuel',n==='cng'?'CNG':n==='benzin'?'Benzin':'Kraftstoff ?',n==='benzin'?'warn':n?'':'mute')}
   const fs=val['03'];
   if(fs!==undefined)setVal('loop',{1:'Offen · Motor noch kalt',2:'Geschlossen · Lambdaregelung aktiv',4:'Offen · Last / Schubabschaltung',8:'Offen · Systemfehler',16:'Geschlossen · Sondenfehler'}[fs]||('Status '+fs));
-  altitude();
+  altitude();chgTick();
   let maf=supported&&supported.has('10')?val['10']:undefined;
   if(maf===undefined&&supported&&supported.has('43')&&val['43']!==undefined&&val['0C']!==undefined)
     maf=val['43']/100*1.184*0.999*val['0C']/120; // Luftfüllung laut Steuergerät (absolute Last), 1,0 l Hubraum
@@ -528,6 +530,46 @@ async function clearDtcs(){
     note(ok?'<b>Fehlerspeicher gelöscht.</b>':'<b>Löschen nicht bestätigt.</b> Zündung an, Motor aus, dann erneut versuchen.');
     await readDtcs();
   }catch(e){log('Fehler: '+e.message,'er')}
+}
+
+/* ---------- Ladebilanz: wie viel der Motorlaufzeit lädt die Lichtmaschine? ---------- */
+const chg={cur:null,hist:[],t:0,saved:0,shown:0};
+try{const o=JSON.parse(localStorage.getItem('ecoup_chg'));if(o){chg.hist=o.hist||[];chg.cur=o.cur||null}}catch(e){}
+function chgTick(){
+  const v=supported&&supported.has('42')?val['42']:val['RV'],rpm=val['0C'],now=Date.now();
+  if(v===undefined||rpm===undefined){chg.t=now;return}
+  if(!chg.cur||!!chg.cur.demo!==elm.demo||now-chg.cur.last>600000){ // neue Fahrt nach 10 min Pause
+    if(chg.cur&&!chg.cur.demo&&chg.cur.run>=120){chg.hist.unshift(chg.cur);chg.hist=chg.hist.slice(0,5)}
+    chg.cur={d:now,last:now,run:0,ok:0,weak:0,hi:0,max:0,sum:0,demo:elm.demo};
+  }
+  const dt=chg.t?Math.min(5,(now-chg.t)/1000):0,c=chg.cur;chg.t=now;
+  if(rpm>400&&dt>0){c.run+=dt;c.sum+=v*dt;if(v>=13.5)c.ok+=dt;else if(v>=13)c.weak+=dt;if(v>15.1&&val['05']>=70)c.hi+=dt;if(v>c.max)c.max=v;c.last=now}
+  if(!elm.demo&&now-chg.saved>10000){chg.saved=now;try{localStorage.setItem('ecoup_chg',JSON.stringify({cur:chg.cur,hist:chg.hist}))}catch(e){}}
+  if(now-chg.shown>2000){chg.shown=now;showChg()}
+}
+function showChg(){
+  const c=chg.cur,el=$('chgRes');if(!el)return;
+  const tm=d=>new Date(d).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  const row=(l,v,cl)=>`<div class="smrow"><span>${l}</span><b class="${cl||''}">${v}</b></div>`;
+  let h='';
+  if(c&&c.run>0){
+    const p=x=>Math.round(x/c.run*100),ok=p(c.ok),weak=p(c.weak),no=Math.max(0,100-ok-weak),hi=p(c.hi);
+    const verdict=c.run<300?'Noch zu kurz für eine Aussage – ab 5 Minuten Motorlauf.':
+      hi>10?'Zeitweise über 15 V bei warmem Motor – den Laderegler prüfen lassen.':
+      ok>=70?'Die Lichtmaschine lädt die meiste Zeit.':
+      ok>=30?'Die Lichtmaschine lädt nur zeitweise. Das kann an der Sparregelung liegen; bleibt die Batterie trotzdem halb leer, prüfen lassen.':
+      'Die Lichtmaschine lädt nur selten – Ladesystem prüfen lassen.';
+    h+=`<div class="tile" style="margin-top:11px;padding-bottom:10px"><div class="lab">Ladebilanz${c.demo?' (Demo)':''} · Fahrt seit ${tm(c.d)}</div><div class="val txt">${verdict}</div>`+
+      row('Motorlaufzeit',fmt(c.run/60,0)+' min')+
+      row('Geladen · ab 13,5 V',ok+' %',ok>=70?'good':ok>=30?'mid':'hot')+
+      row('Schwach · 13,0 bis 13,5 V',weak+' %')+
+      row('Nicht geladen · unter 13,0 V',no+' %')+
+      row('Mittlere / höchste Spannung',fmt(c.sum/c.run,2)+' / '+fmt(c.max,2)+' V',c.max>15.1?'mid':'')+
+      (hi?row('Über 15,1 V bei warmem Motor',hi+' %','hot'):'')+'</div>';
+  }
+  if(chg.hist.length)h+=`<div class="tile" style="margin-top:11px;padding-bottom:10px"><div class="lab">Frühere Fahrten</div>`+
+    chg.hist.map(x=>row(tm(x.d)+' · '+fmt(x.run/60,0)+' min',Math.round(x.ok/x.run*100)+' % geladen · max '+fmt(x.max,1)+' V')).join('')+'</div>';
+  el.innerHTML=h;
 }
 
 /* ---------- Startmessung: Ruhespannung, Einbruch beim Anlassen, Ladespannung ---------- */
@@ -641,6 +683,7 @@ $('btnRead').onclick=readDtcs;
 $('btnSm').onclick=startMeasure;
 $('smX').onclick=()=>{if(measuring)smAbort=true;else $('ovS').classList.remove('show')};
 try{const r=JSON.parse(localStorage.getItem('ecoup_sm'));if(r&&r.d)showSm(r)}catch(e){}
+showChg();
 $('btnClear').onclick=()=>{if(!connected){note('<b>Erst verbinden</b> – dann lässt sich der Fehlerspeicher löschen.');return}$('ov').classList.add('show')};
 $('ovNo').onclick=()=>$('ov').classList.remove('show');
 $('ovYes').onclick=clearDtcs;
