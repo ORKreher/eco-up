@@ -86,7 +86,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-
 </head>
 <body>
 <h1 class="title">eco up! · Fahrzeugdaten</h1>
-<div class="sub">VW eco up! CNG · vGate iCar Pro 2S · Version 8</div>
+<div class="sub">VW eco up! CNG · vGate iCar Pro 2S · Version 9</div>
 
 <section class="hero">
   <div class="state"><span class="badge" id="badge">Offline</span></div>
@@ -147,7 +147,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-
   <h2>Gespeicherte Fehler</h2><div id="dtcStored"><div class="empty">Noch nicht ausgelesen.</div></div>
   <h2>Vorläufige Fehler</h2><div id="dtcPending"><div class="empty">Noch nicht ausgelesen.</div></div>
   <h2>Dauerhafte Fehler</h2><div id="dtcPerm"><div class="empty">Noch nicht ausgelesen.</div></div>
+  <h2>VW-Speicher Motor (Test)</h2><div id="dtcVw"><div class="empty">Noch nicht ausgelesen. Zeigt auch sporadische Fehler, die im allgemeinen Speicher nicht mehr stehen.</div></div>
   <div class="btns" style="margin-top:8px">
+    <button class="efb" id="btnVw">🔎 VW-Speicher auslesen</button>
     <button class="efb" id="btnRead">🔍 Fehlerspeicher auslesen</button>
     <button class="wbtn" id="btnClear">🗑 Fehlerspeicher löschen</button>
   </div>
@@ -523,6 +525,26 @@ async function readDtcs(){
   }catch(e){log('Fehler: '+e.message,'er')}
   b.disabled=false;b.textContent='🔍 Fehlerspeicher auslesen';
 }
+/* Herstellerspeicher des Motorsteuergeräts (UDS-Dienst 19 02), nur lesend */
+async function readVw(){
+  if(!connected){note('<b>Erst verbinden</b> – dann lässt sich der VW-Speicher auslesen.');return}
+  const b=$('btnVw');b.disabled=true;b.textContent='Lese …';let h='';
+  try{
+    let r;
+    try{await cmd('ATSH7E0');r=await cmd('19020D',9000)}finally{await cmd('ATSH7DF').catch(()=>{})}
+    const fr=parseFrames(r),id=Object.keys(fr).find(k=>fr[k][0]===0x59)||Object.keys(fr).find(k=>fr[k][0]===0x7F),p=id&&fr[id];
+    if(!p)h='<div class="empty">Keine Antwort – das Steuergerät beantwortet diese Abfrage über den Adapter nicht.</div>';
+    else if(p[0]===0x7F)h=`<div class="empty">Das Steuergerät lehnt die Abfrage ab (Code ${hex(p[2]||0)}).</div>`;
+    else{
+      const L=[];
+      for(let i=3;i+3<p.length;i+=4){const st=p[i+3];if(!(st&0x0D))continue;
+        L.push({code:'PCBU'[p[i]>>6]+((p[i]>>4)&3)+hex(p[i]&15,1)+hex(p[i+1]),ft:p[i+2],st})}
+      h=L.length?L.map(d=>{const act=d.st&1,kind=act?'aktiv':(d.st&8)?'sporadisch':'vorläufig';
+        return `<div class="dtc${act?'':' pend'}"><span class="kind">${kind}</span><div class="code">${d.code}</div><div class="txt">${dtcText(d.code)}<br><small style="color:#8a8a8a">Fehlerart ${hex(d.ft)} · Status ${hex(d.st)}</small></div></div>`}).join(''):'<div class="empty">Keine Einträge. ✔</div>';
+    }
+  }catch(e){log('Fehler: '+e.message,'er');h='<div class="empty">Auslesen fehlgeschlagen: '+e.message+'</div>'}
+  $('dtcVw').innerHTML=h;b.disabled=false;b.textContent='🔎 VW-Speicher auslesen';
+}
 async function clearDtcs(){
   $('ov').classList.remove('show');
   try{
@@ -653,6 +675,7 @@ function demoCmd(c){
   if(c==='03')return isoTp('7E8',demo.cleared?[0x43,0]:[0x43,1,0x01,0x36]);
   if(c==='07')return isoTp('7E8',demo.cleared?[0x47,0]:[0x47,1,0x01,0x71]);
   if(c==='0A')return isoTp('7E8',[0x4A,0]);
+  if(c==='19020D')return isoTp('7E8',demo.cleared?[0x59,2,0xFF]:[0x59,2,0xFF,0x03,0x00,0x00,0x08,0x03,0x02,0x00,0x09]);
   if(c==='04'){demo.cleared=true;return isoTp('7E8',[0x44])}
   return 'NO DATA';
 }
@@ -680,6 +703,7 @@ $('tabs').onclick=e=>{const b=e.target.closest('.tab');if(!b)return;tab=b.datase
   TILES.filter(t=>t.tab===tab).forEach(t=>spark(t.k));
   if(tab==='dtc'&&connected&&$('dtcStored').textContent.includes('Noch nicht'))readDtcs()};
 $('btnRead').onclick=readDtcs;
+$('btnVw').onclick=readVw;
 $('btnSm').onclick=startMeasure;
 $('smX').onclick=()=>{if(measuring)smAbort=true;else $('ovS').classList.remove('show')};
 try{const r=JSON.parse(localStorage.getItem('ecoup_sm'));if(r&&r.d)showSm(r)}catch(e){}
