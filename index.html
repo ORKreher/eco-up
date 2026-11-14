@@ -86,7 +86,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-
 </head>
 <body>
 <h1 class="title">eco up! · Fahrzeugdaten</h1>
-<div class="sub">VW eco up! CNG · vGate iCar Pro 2S · Version 9</div>
+<div class="sub">VW eco up! CNG · vGate iCar Pro 2S · Version 10</div>
 
 <section class="hero">
   <div class="state"><span class="badge" id="badge">Offline</span></div>
@@ -531,16 +531,15 @@ async function readVw(){
   const b=$('btnVw');b.disabled=true;b.textContent='Lese …';let h='';
   try{
     let r;
-    try{await cmd('ATSH7E0');r=await cmd('19020D',9000)}finally{await cmd('ATSH7DF').catch(()=>{})}
+    try{await cmd('ATSH7E0');r=await cmd('1902AF',9000)}finally{await cmd('ATSH7DF').catch(()=>{})}
     const fr=parseFrames(r),id=Object.keys(fr).find(k=>fr[k][0]===0x59)||Object.keys(fr).find(k=>fr[k][0]===0x7F),p=id&&fr[id];
     if(!p)h='<div class="empty">Keine Antwort – das Steuergerät beantwortet diese Abfrage über den Adapter nicht.</div>';
     else if(p[0]===0x7F)h=`<div class="empty">Das Steuergerät lehnt die Abfrage ab (Code ${hex(p[2]||0)}).</div>`;
     else{
       const L=[];
-      for(let i=3;i+3<p.length;i+=4){const st=p[i+3];if(!(st&0x0D))continue;
-        L.push({code:'PCBU'[p[i]>>6]+((p[i]>>4)&3)+hex(p[i]&15,1)+hex(p[i+1]),ft:p[i+2],st})}
-      h=L.length?L.map(d=>{const act=d.st&1,kind=act?'aktiv':(d.st&8)?'sporadisch':'vorläufig';
-        return `<div class="dtc${act?'':' pend'}"><span class="kind">${kind}</span><div class="code">${d.code}</div><div class="txt">${dtcText(d.code)}<br><small style="color:#8a8a8a">Fehlerart ${hex(d.ft)} · Status ${hex(d.st)}</small></div></div>`}).join(''):'<div class="empty">Keine Einträge. ✔</div>';
+      for(let i=3;i+3<p.length;i+=4){const st=p[i+3];if(!(st&0x2D))continue;L.push({n:(p[i]<<16)|(p[i+1]<<8)|p[i+2],st})}
+      h=L.length?L.map(d=>{const act=d.st&1,kind=act?'aktiv':(d.st&8)?'bestätigt, sporadisch':(d.st&4)?'vorläufig':'früher aufgetreten';
+        return `<div class="dtc${act?'':' pend'}"><span class="kind">${kind}</span><div class="code">${d.n}</div><div class="txt">VW-Fehlernummer ${d.n} (hex ${hex(d.n,6)}) · Status ${hex(d.st)}<br><small style="color:#8a8a8a">${(d.st&0x0D)?'':'Seit dem letzten Löschen mindestens einmal aufgetreten, derzeit nicht bestätigt. '}Der Klartext steht nur im VW-Fehlerverzeichnis (Werkstatt, VCDS, OBDeleven).</small></div></div>`}).join(''):'<div class="empty">Keine Einträge. ✔</div>';
     }
   }catch(e){log('Fehler: '+e.message,'er');h='<div class="empty">Auslesen fehlgeschlagen: '+e.message+'</div>'}
   $('dtcVw').innerHTML=h;b.disabled=false;b.textContent='🔎 VW-Speicher auslesen';
@@ -675,7 +674,7 @@ function demoCmd(c){
   if(c==='03')return isoTp('7E8',demo.cleared?[0x43,0]:[0x43,1,0x01,0x36]);
   if(c==='07')return isoTp('7E8',demo.cleared?[0x47,0]:[0x47,1,0x01,0x71]);
   if(c==='0A')return isoTp('7E8',[0x4A,0]);
-  if(c==='19020D')return isoTp('7E8',demo.cleared?[0x59,2,0xFF]:[0x59,2,0xFF,0x03,0x00,0x00,0x08,0x03,0x02,0x00,0x09]);
+  if(c==='1902AF')return isoTp('7E8',demo.cleared?[0x59,2,0xFF]:[0x59,2,0xFF,0x00,0x15,0x4D,0x20,0x00,0x10,0xA5,0x60]);
   if(c==='04'){demo.cleared=true;return isoTp('7E8',[0x44])}
   return 'NO DATA';
 }
