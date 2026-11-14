@@ -86,7 +86,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-
 </head>
 <body>
 <h1 class="title">eco up! · Fahrzeugdaten</h1>
-<div class="sub">VW eco up! CNG · vGate iCar Pro 2S · Version 10</div>
+<div class="sub">VW eco up! CNG · vGate iCar Pro 2S · Version 11</div>
 
 <section class="hero">
   <div class="state"><span class="badge" id="badge">Offline</span></div>
@@ -126,6 +126,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-
   <div id="chgRes"></div>
   <div class="btns" style="margin-top:14px"><button class="wbtn" id="btnSm">🔋 Startmessung · Batterie &amp; Lichtmaschine</button></div>
   <div id="smRes"></div>
+  <div class="note"><b>Spannungskorrektur:</b> Die App misst am Steuergerät bzw. Adapter und liegt dadurch etwas unter dem Wert direkt an den Batteriepolen. Der Unterschied zum Multimeter wird auf alle Spannungswerte aufgeschlagen.
+    <form class="cmdrow" id="voffForm"><input type="text" id="voffIn" inputmode="decimal" placeholder="Korrektur in V"><button class="efb" style="width:auto">Setzen</button></form>
+    <span id="voffMsg" style="color:#8a8a8a"></span>
+  </div>
 </section>
 
 <section class="panel" id="p-cng">
@@ -191,7 +195,7 @@ const TILES=[
  {k:'5C',tab:'motor',lab:'Öltemperatur',u:'°C',f:d=>d[0]-40,cls:v=>v>=130?'hot':v<60?'cold':'good'},
  {k:'0F',tab:'motor',lab:'Ansaugluft',u:'°C',f:d=>d[0]-40},
  {k:'46',tab:'motor',lab:'Außentemperatur',u:'°C',f:d=>d[0]-40},
- {k:'42',tab:'motor',lab:'Bordspannung',u:'V',dec:2,f:d=>u16(d)/1000,cls:v=>v<11.8?'hot':v<12.4?'mid':'good'},
+ {k:'42',tab:'motor',lab:'Bordspannung',u:'V',dec:2,f:d=>u16(d)/1000+vOff,cls:v=>v<11.8?'hot':v<12.4?'mid':'good'},
  {k:'RV',tab:'motor',lab:'Spannung am Adapter',u:'V',dec:1,cls:v=>v<11.8?'hot':v<12.4?'mid':'good'},
  {k:'0C',tab:'motor',lab:'Drehzahl',u:'1/min',f:d=>u16(d)/4},
  {k:'04',tab:'motor',lab:'Motorlast',u:'%',f:d=>d[0]*100/255},
@@ -226,6 +230,7 @@ const TILES=[
  {k:'31',tab:'dtc',lab:'km seit Löschen',u:'km',f:u16,sat:65535},
  {k:'30',tab:'dtc',lab:'Warmläufe seit Löschen',u:'',f:d=>d[0],sat:255},
 ];
+let vOff=0.2;try{const o=parseFloat(localStorage.getItem('ecoup_voff'));if(isFinite(o))vOff=o}catch(e){}
 const RAWP={'51':d=>d[0],'03':d=>d[0],'33':d=>d[0]};
 const TILE={};TILES.forEach(t=>TILE[t.k]=t);
 const val={},hist={},mm={};
@@ -417,7 +422,7 @@ async function loop(){
       want.add('0C');want.add(supported.has('42')?'42':'RV');
       for(const p of want){
         if(!connected||me!==loopId)return;
-        if(p==='RV'){if(!supported.has('42')){const m=(await cmd('ATRV')).match(/[\d.]+/);if(m)setVal('RV',parseFloat(m[0]))}continue}
+        if(p==='RV'){if(!supported.has('42')){const m=(await cmd('ATRV')).match(/[\d.]+/);if(m)setVal('RV',parseFloat(m[0])+vOff)}continue}
         if(!supported.has(p))continue;
         const d=await obd('01'+p);if(!d)continue;
         if(p==='01'){status01(d);continue}
@@ -525,6 +530,7 @@ async function readDtcs(){
   }catch(e){log('Fehler: '+e.message,'er')}
   b.disabled=false;b.textContent='🔍 Fehlerspeicher auslesen';
 }
+const VW_TXT={4261:'Systemspannung zu niedrig',5453:'Starterrelais – elektrischer Fehler im Stromkreis',10198:'Verbrennungsaussetzer Zylinder 3'};
 /* Herstellerspeicher des Motorsteuergeräts (UDS-Dienst 19 02), nur lesend */
 async function readVw(){
   if(!connected){note('<b>Erst verbinden</b> – dann lässt sich der VW-Speicher auslesen.');return}
@@ -539,7 +545,7 @@ async function readVw(){
       const L=[];
       for(let i=3;i+3<p.length;i+=4){const st=p[i+3];if(!(st&0x2D))continue;L.push({n:(p[i]<<16)|(p[i+1]<<8)|p[i+2],st})}
       h=L.length?L.map(d=>{const act=d.st&1,kind=act?'aktiv':(d.st&8)?'bestätigt, sporadisch':(d.st&4)?'vorläufig':'früher aufgetreten';
-        return `<div class="dtc${act?'':' pend'}"><span class="kind">${kind}</span><div class="code">${d.n}</div><div class="txt">VW-Fehlernummer ${d.n} (hex ${hex(d.n,6)}) · Status ${hex(d.st)}<br><small style="color:#8a8a8a">${(d.st&0x0D)?'':'Seit dem letzten Löschen mindestens einmal aufgetreten, derzeit nicht bestätigt. '}Der Klartext steht nur im VW-Fehlerverzeichnis (Werkstatt, VCDS, OBDeleven).</small></div></div>`}).join(''):'<div class="empty">Keine Einträge. ✔</div>';
+        return `<div class="dtc${act?'':' pend'}"><span class="kind">${kind}</span><div class="code">${d.n}</div><div class="txt">${VW_TXT[d.n]?'<b style="color:#fff">'+VW_TXT[d.n]+'</b><br>':''}VW-Fehlernummer ${d.n} (hex ${hex(d.n,6)}) · Status ${hex(d.st)}<br><small style="color:#8a8a8a">${(d.st&0x0D)?'':'Seit dem letzten Löschen mindestens einmal aufgetreten, derzeit nicht bestätigt. '}${VW_TXT[d.n]?'Bedeutung aus eigener Recherche, nicht vom Steuergerät.':'Der Klartext steht nur im VW-Fehlerverzeichnis (Werkstatt, VCDS, OBDeleven).'}</small></div></div>`}).join(''):'<div class="empty">Keine Einträge. ✔</div>';
     }
   }catch(e){log('Fehler: '+e.message,'er');h='<div class="empty">Auslesen fehlgeschlagen: '+e.message+'</div>'}
   $('dtcVw').innerHTML=h;b.disabled=false;b.textContent='🔎 VW-Speicher auslesen';
@@ -596,7 +602,7 @@ function showChg(){
 /* ---------- Startmessung: Ruhespannung, Einbruch beim Anlassen, Ladespannung ---------- */
 let measuring=false,smAbort=false;
 const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:NaN;
-async function volt(){const m=(await cmd('ATRV',1500)).match(/\d+\.?\d*/);const v=m?parseFloat(m[0]):null;if(v)$('smV').innerHTML=fmt(v,1)+'<span class="u">V</span>';return v}
+async function volt(){const m=(await cmd('ATRV',1500)).match(/\d+\.?\d*/);const v=m?parseFloat(m[0])+vOff:null;if(v)$('smV').innerHTML=fmt(v,1)+'<span class="u">V</span>';return v}
 async function rpmNow(){try{const d=await obd('010C',1500);return d?u16(d)/4:0}catch(e){return 0}}
 function smEnd(msg){measuring=false;demo.sm=0;if(msg){$('smTxt').textContent=msg;$('smX').textContent='Schließen'}else $('ovS').classList.remove('show')}
 function smChk(){if(smAbort||!connected)throw new Error('abbruch')}
@@ -703,6 +709,11 @@ $('tabs').onclick=e=>{const b=e.target.closest('.tab');if(!b)return;tab=b.datase
   if(tab==='dtc'&&connected&&$('dtcStored').textContent.includes('Noch nicht'))readDtcs()};
 $('btnRead').onclick=readDtcs;
 $('btnVw').onclick=readVw;
+const voffShow=()=>{$('voffMsg').textContent='Aktuell: '+(vOff>=0?'+':'')+fmt(vOff,2)+' V'};
+$('voffForm').onsubmit=e=>{e.preventDefault();const v=parseFloat($('voffIn').value.replace(',','.'));
+  if(!isFinite(v)||Math.abs(v)>1){$('voffMsg').textContent='Bitte einen Wert zwischen -1 und 1 eintragen, z. B. 0,2.';return}
+  vOff=v;try{localStorage.setItem('ecoup_voff',v)}catch(_){}$('voffIn').value='';hist['42']=[];delete mm['42'];voffShow()};
+voffShow();
 $('btnSm').onclick=startMeasure;
 $('smX').onclick=()=>{if(measuring)smAbort=true;else $('ovS').classList.remove('show')};
 try{const r=JSON.parse(localStorage.getItem('ecoup_sm'));if(r&&r.d)showSm(r)}catch(e){}
